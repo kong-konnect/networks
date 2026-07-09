@@ -1,0 +1,13 @@
+/* Root styles cleared for prototype */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Push actions/more button to the right in all tables */
+.k-table td:last-child:has(.actions-trigger),
+.actions-column {
+  text-align: end;
+}
