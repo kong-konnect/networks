@@ -13,11 +13,6 @@ const routes = [
     component: () => import('../views/NetworksList.vue'),
   },
   {
-    path: '/networks/health',
-    name: 'networks-health',
-    component: () => import('../views/NetworksHealthOverview.vue'),
-  },
-  {
     path: '/networks/create',
     name: 'networks-create',
     component: () => import('../views/NetworkCreate.vue'),
@@ -43,9 +38,24 @@ const routes = [
     component: () => import('../views/DnsDetail.vue'),
   },
   {
+    path: '/networks/:id/test',
+    name: 'networks-test-endpoint',
+    component: () => import('../views/TestEndpoint.vue'),
+  },
+  {
     path: '/gateways/create',
     name: 'gateway-create',
     component: () => import('../views/GatewayCreate.vue'),
+  },
+  {
+    path: '/gateways/overview',
+    name: 'gateway-overview',
+    component: () => import('../views/ControlPlaneOverview.vue'),
+  },
+  {
+    path: '/gateways/data-plane-nodes',
+    name: 'data-plane-nodes',
+    component: () => import('../views/DataPlaneNodes.vue'),
   },
 ]
 

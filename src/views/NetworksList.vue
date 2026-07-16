@@ -16,13 +16,8 @@
     </template>
 
     <div class="networks-list">
-      <!-- View toggle + filter row -->
+      <!-- Filter row -->
       <div class="list-toolbar">
-        <KSegmentedControl
-          v-model="activeView"
-          :options="viewOptions"
-          @click="handleViewChange"
-        />
         <div class="filter-controls">
           <KSelect
             v-model="statusFilter"
@@ -52,10 +47,35 @@
             >
               {{ row.name }}
             </router-link>
+            <KBadge :appearance="stateBadgeAppearance(row.status)">
+              {{ stateLabel(row.status) }}
+            </KBadge>
+            <KTooltip
+              v-if="row.attachedGatewayCount === 0"
+              text="This network is not used by any gateways. Delete this network to reduce your cost."
+            >
+              <WarningIcon
+                class="warn-icon"
+                :size="KUI_ICON_SIZE_30"
+              />
+            </KTooltip>
           </div>
         </template>
 
-        <template #cloud="{ row }">
+        <template #networkId="{ row }">
+          <KCopy
+            v-if="row.providerNetworkId"
+            format="short"
+            :text="row.providerNetworkId"
+          />
+          <span v-else class="dash">—</span>
+        </template>
+
+        <template #cgws="{ row }">
+          {{ row.attachedGatewayCount }}
+        </template>
+
+        <template #provider="{ row }">
           <KBadge :appearance="cloudBadgeAppearance(row.cloud)">
             {{ row.cloud.toUpperCase() }}
           </KBadge>
@@ -65,32 +85,23 @@
           <span class="regions-text">{{ row.regions.map((r: any) => r.region).join(', ') }}</span>
         </template>
 
-        <template #gateways="{ row }">
-          {{ row.attachedGatewayCount }}
+        <template #cidr="{ row }">
+          <span class="regions-text">{{ row.regions.map((r: any) => r.cidr).join(', ') }}</span>
         </template>
 
-        <template #connections="{ row }">
-          {{ row.connectionCount }}
+        <template #zones="{ row }">
+          <span class="regions-text">{{ zonesLabel(row) }}</span>
         </template>
 
-        <template #status="{ row }">
-          <div class="status-cell">
-            <KBadge :appearance="networkStatusBadge(row.status)">
-              {{ row.status }}
+        <template #privateNetworking="{ row }">
+          <div class="pn-cell">
+            <KBadge
+              v-for="label in privateNetworkingLabels(row)"
+              :key="label"
+              appearance="neutral"
+            >
+              {{ label }}
             </KBadge>
-            <span v-if="row.status !== 'ready'" class="last-checked">
-              Checked {{ formatTimeSince(row.lastCheckedAt) }} ago
-            </span>
-          </div>
-        </template>
-
-        <template #health="{ row }">
-          <div class="health-cell">
-            <span
-              class="health-dot"
-              :class="`health-dot--${getHealthStatus(row).color}`"
-            />
-            <span class="health-label">{{ getHealthStatus(row).label }}</span>
           </div>
         </template>
 
@@ -144,34 +155,30 @@ import {
 import {
   AddCircleIcon,
   ConnectionsIcon,
+  WarningIcon,
 } from '@kong/icons'
 import {
   KBadge,
   KButton,
+  KCopy,
   KDropdownItem,
   KEmptyState,
   KModal,
-  KSegmentedControl,
   KSelect,
+  KTooltip,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import type { Network, Connection } from '@/types'
+import type { Network } from '@/types'
 
 const router = useRouter()
 const store = useNetworksStore()
 
-const activeView = ref('networks')
 const statusFilter = ref('')
 const fetcherCacheKey = ref(0)
 const showDeleteModal = ref(false)
 const networkToDelete = ref<Network | null>(null)
-
-const viewOptions = [
-  { label: 'Networks', value: 'networks' },
-  { label: 'Health overview', value: 'health' },
-]
 
 const statusFilterItems = [
   { label: 'All statuses', value: '' },
@@ -182,27 +189,58 @@ const statusFilterItems = [
 
 const displayHeaders = [
   { label: 'Name', key: 'name', sortable: true },
-  { label: 'Cloud', key: 'cloud', sortable: true },
-  { label: 'Regions', key: 'regions', sortable: false },
-  { label: 'Gateways', key: 'gateways', sortable: false },
-  { label: 'Connections', key: 'connections', sortable: false },
-  { label: 'Status', key: 'status', sortable: true },
-  { label: 'Health', key: 'health', sortable: false },
+  { label: 'Network ID', key: 'networkId', sortable: false },
+  { label: 'CGWs', key: 'cgws', sortable: true },
+  { label: 'Provider', key: 'provider', sortable: true },
+  { label: 'Region', key: 'regions', sortable: false },
+  { label: 'CIDR', key: 'cidr', sortable: false },
+  { label: 'Zones', key: 'zones', sortable: false },
+  { label: 'Private networking', key: 'privateNetworking', sortable: false },
 ]
 
 const fetcher = async () => {
   await new Promise(resolve => setTimeout(resolve, 200))
-  let data = store.getNetworks()
+  // Real, selectable networks only — legacy "default" placeholders and
+  // terminating networks are never shown (mirrors production filtering out offline).
+  let data = store.getSelectableNetworks()
   if (statusFilter.value) {
     data = data.filter(n => n.status === statusFilter.value)
   }
   return { data, total: data.length }
 }
 
-const handleViewChange = (val: string) => {
-  if (val === 'health') {
-    router.push({ name: 'networks-health' })
+// Network lifecycle state, shown inline in the Name cell (production pattern).
+const stateLabel = (status: string) =>
+  status === 'terminating' ? 'Deleting'
+    : status === 'ready' ? 'Ready'
+      : status === 'initialising' ? 'Initializing'
+        : status === 'error' ? 'Error' : status
+const stateBadgeAppearance = (status: string) =>
+  status === 'ready' ? 'success'
+    : status === 'initialising' ? 'warning'
+      : status === 'error' ? 'danger'
+        : status === 'terminating' ? 'neutral' : 'info'
+
+const zonesLabel = (network: Network) => {
+  const zones = network.regions.flatMap(r => r.zones ?? [])
+  return zones.length ? zones.join(', ') : '—'
+}
+
+// Private-networking attachment type(s) present on the network's connections.
+const PRIVATE_NETWORKING_LABELS: Record<string, string> = {
+  'aws-vpc-peering': 'VPC Peering',
+  'gcp-vpc-peering': 'VPC Peering',
+  'azure-vnet-peering': 'Virtual network peering',
+  'aws-transit-gateway': 'Transit Gateway',
+  'azure-virtual-hub': 'Virtual hub peering',
+}
+const privateNetworkingLabels = (network: Network): string[] => {
+  const conns = store.getConnectionsByNetworkId(network.id)
+  const labels = new Set<string>()
+  for (const c of conns) {
+    labels.add(PRIVATE_NETWORKING_LABELS[c.type] ?? 'Resource Endpoints')
   }
+  return labels.size ? [...labels] : ['No private network']
 }
 
 const cloudBadgeAppearance = (cloud: string) => {
@@ -210,48 +248,6 @@ const cloudBadgeAppearance = (cloud: string) => {
   if (cloud === 'gcp') return 'info'
   if (cloud === 'azure') return 'decorative-purple'
   return 'neutral'
-}
-
-const networkStatusBadge = (status: string) => {
-  if (status === 'ready') return 'success'
-  if (status === 'initialising') return 'warning'
-  if (status === 'error') return 'danger'
-  if (status === 'terminating') return 'neutral'
-  return 'neutral'
-}
-
-const getHealthStatus = (network: Network): { label: string; color: string } => {
-  if (network.status === 'error') {
-    return { label: 'Error', color: 'danger' }
-  }
-  if (network.status === 'terminating') {
-    return { label: 'Terminating', color: 'neutral' }
-  }
-  if (network.status === 'initialising') {
-    const elapsedMs = Date.now() - new Date(network.createdAt).getTime()
-    const elapsedMins = elapsedMs / 60000
-    if (elapsedMins > 90) {
-      return { label: 'Stuck', color: 'warning' }
-    }
-    return { label: 'Setting up', color: 'neutral' }
-  }
-  // status === 'ready'
-  const networkConnections: Connection[] = store.getConnectionsByNetworkId(network.id)
-  const hasError = networkConnections.some(c => c.status === 'error')
-  if (hasError) return { label: 'Connection error', color: 'danger' }
-  const hasPendingAction = networkConnections.some(c => c.status === 'pending-user-action')
-  if (hasPendingAction) return { label: 'Awaiting action', color: 'warning' }
-  if (network.attachedGatewayCount === 0) return { label: 'Unused', color: 'warning' }
-  return { label: 'Healthy', color: 'success' }
-}
-
-const formatTimeSince = (isoDate: string): string => {
-  const diffMs = Date.now() - new Date(isoDate).getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  if (diffMins < 1) return 'less than a minute'
-  if (diffMins < 60) return `${diffMins} min`
-  const diffHrs = Math.floor(diffMins / 60)
-  return `${diffHrs}h`
 }
 
 const handleRowClick = ({ row }: { row: Network }) => {
@@ -296,6 +292,11 @@ const confirmDelete = () => {
 }
 
 .name-cell {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-30;
+
   .name-link {
     color: $kui-color-text-primary;
     font-weight: $kui-font-weight-semibold;
@@ -305,6 +306,10 @@ const confirmDelete = () => {
       text-decoration: underline;
     }
   }
+
+  .warn-icon {
+    color: $kui-color-text-warning;
+  }
 }
 
 .regions-text {
@@ -312,37 +317,13 @@ const confirmDelete = () => {
   font-size: $kui-font-size-30;
 }
 
-.status-cell {
-  align-items: flex-start;
+.pn-cell {
   display: flex;
-  flex-direction: column;
-  gap: $kui-space-20;
-
-  .last-checked {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
-  }
+  flex-wrap: wrap;
+  gap: $kui-space-30;
 }
 
-.health-cell {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-30;
-
-  .health-dot {
-    border-radius: 50%;
-    flex-shrink: 0;
-    height: 8px;
-    width: 8px;
-
-    &--success { background-color: $kui-color-background-success; }
-    &--warning { background-color: $kui-color-background-warning; }
-    &--danger { background-color: $kui-color-background-danger; }
-    &--neutral { background-color: $kui-color-background-neutral; }
-  }
-
-  .health-label {
-    font-size: $kui-font-size-30;
-  }
+.dash {
+  color: $kui-color-text-neutral;
 }
 </style>

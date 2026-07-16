@@ -1,6 +1,6 @@
 <template>
   <div class="cmap">
-    <!-- Link layer (SVG) sits behind the node cards -->
+    <!-- Flow: customer sources → this network (+ its gateways) → customer upstreams -->
     <svg
       class="cmap-links"
       :viewBox="`0 0 ${size.w} ${size.h}`"
@@ -45,16 +45,14 @@
       />
     </svg>
 
-    <!-- Column headers -->
     <div class="cmap-headers">
       <span class="cmap-header">Customer clients / VPCs</span>
       <span class="cmap-header cmap-header--center">Kong network</span>
       <span class="cmap-header cmap-header--right">Customer upstreams</span>
     </div>
 
-    <!-- Node grid -->
     <div class="cmap-grid">
-      <!-- Left: ingress + bidirectional (customer side) -->
+      <!-- Left: inbound (ingress endpoints + bidirectional peering) -->
       <div class="cmap-col cmap-col--left">
         <button
           v-for="conn in leftConnections"
@@ -75,9 +73,6 @@
             <span class="cmap-tag">{{ directionLabel(conn) }}</span>
             <span class="cmap-tag cmap-tag--dim">{{ scopeLabel(conn) }}</span>
           </div>
-          <div class="cmap-node-tags">
-            <span class="cmap-tag cmap-tag--dim">{{ consumersLabel(conn) }}</span>
-          </div>
           <div
             v-if="conn.status !== 'ready'"
             class="cmap-node-action"
@@ -92,22 +87,34 @@
         >No inbound or peered connections</span>
       </div>
 
-      <!-- Center: the network -->
+      <!-- Center: the network and the gateways that run in it -->
       <div class="cmap-col cmap-col--center">
         <div
           ref="networkRef"
           class="cmap-network"
           data-testid="cmap-network"
         >
-          <span class="cmap-network-name">{{ network.name }}</span>
-          <span class="cmap-network-sub">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
-          <span class="cmap-network-cidr">{{ network.regions[0].cidr }}</span>
-          <KBadge :appearance="networkBadge(network.status)">{{ network.status }}</KBadge>
-          <span class="cmap-network-count">{{ connections.length }} {{ connections.length === 1 ? 'connection' : 'connections' }}</span>
+          <div class="cmap-network-identity">
+            <span class="cmap-network-name">{{ network.name }}</span>
+            <span class="cmap-network-sub">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
+            <span class="cmap-network-cidr">{{ network.regions[0].cidr }}</span>
+          </div>
+
+          <div v-if="gateways.length" class="cmap-network-gateways">
+            <span class="cmap-group-label">Gateways</span>
+            <span
+              v-for="gw in gateways"
+              :key="gw.id"
+              class="cmap-chip"
+            >
+              <RuntimesIcon :size="KUI_ICON_SIZE_20" decorative />
+              {{ gw.name }}
+            </span>
+          </div>
         </div>
       </div>
 
-      <!-- Right: egress (upstream side) -->
+      <!-- Right: outbound (egress → customer upstreams) -->
       <div class="cmap-col cmap-col--right">
         <button
           v-for="conn in egressConnections"
@@ -143,7 +150,32 @@
       </div>
     </div>
 
-    <!-- Legend -->
+    <!-- Private DNS resolves the upstream names reached through this network.
+         Shown as its own row — it is resolution config on the network, not part
+         of the traffic flow above. -->
+    <div v-if="dnsConfigs.length" class="cmap-dns">
+      <span class="cmap-group-label">Private DNS</span>
+      <div class="cmap-dns-list">
+        <button
+          v-for="d in dnsConfigs"
+          :key="d.id"
+          type="button"
+          class="cmap-chip cmap-chip--button"
+          :class="{ 'cmap-chip--issue': d.status !== 'ready' }"
+          :data-testid="`cmap-dns-${d.id}`"
+          @click="$emit('select-dns', d.id)"
+        >
+          <span class="cmap-chip-dot" :class="`cmap-chip-dot--${dnsTone(d.status)}`" />
+          {{ d.name }}
+          <span
+            v-if="d.status !== 'ready'"
+            class="cmap-chip-status"
+            :class="`cmap-chip-status--${dnsTone(d.status)}`"
+          >{{ d.status === 'error' ? 'Not resolving' : 'Pending' }}</span>
+        </button>
+      </div>
+    </div>
+
     <div class="cmap-legend">
       <span class="cmap-legend-item"><span class="cmap-swatch cmap-swatch--ready" />Ready</span>
       <span class="cmap-legend-item"><span class="cmap-swatch cmap-swatch--warning" />Pending customer action</span>
@@ -158,7 +190,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onBeforeUpdate, nextTick, watch } from 'vue'
 import { KBadge } from '@kong/kongponents'
-import type { Network, Connection, ConnectionStatus } from '@/types'
+import { RuntimesIcon } from '@kong/icons'
+import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
+import type { Network, Connection, ConnectionStatus, Gateway, DnsConfig, DnsStatus } from '@/types'
 import {
   connectionTypeLabel,
   directionLabel,
@@ -169,32 +203,34 @@ import {
   directionOf,
 } from '@/utils/connectionDisplay'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   network: Network
   connections: Connection[]
+  gateways?: Gateway[]
+  dnsConfigs?: DnsConfig[]
+}>(), {
+  gateways: () => [],
+  dnsConfigs: () => [],
+})
+
+defineEmits<{
+  (e: 'select', id: string): void
+  (e: 'select-dns', id: string): void
 }>()
 
-defineEmits<{ (e: 'select', id: string): void }>()
+const dnsTone = (status: DnsStatus) =>
+  status === 'error' ? 'danger' : status === 'pending' ? 'warning' : 'ready'
 
-// A connection is "bidirectional" when it's a peering-family resource.
 const isBidirectional = (conn: Connection) => conn.family === 'peering'
 const effectiveDirection = (conn: Connection) =>
   isBidirectional(conn) ? 'bidirectional' : directionOf(conn.type)
 
-// Left column: everything that terminates at the network from the customer side
-// — ingress endpoints and bidirectional peering. Right column: egress only.
 const leftConnections = computed(() =>
   props.connections.filter(c => effectiveDirection(c) !== 'egress'),
 )
 const egressConnections = computed(() =>
   props.connections.filter(c => effectiveDirection(c) === 'egress' && !isBidirectional(c)),
 )
-
-const consumersLabel = (conn: Connection) => {
-  const n = conn.allowedConsumers?.length ?? 0
-  if (n === 0) return 'No allowed accounts'
-  return `${n} ${n === 1 ? 'account' : 'accounts'} allowed`
-}
 
 const statusTone = (status: ConnectionStatus) => {
   if (status === 'ready') return 'ready'
@@ -203,16 +239,12 @@ const statusTone = (status: ConnectionStatus) => {
   return 'neutral'
 }
 
-const networkBadge = (status: string) =>
-  status === 'ready' ? 'success' : status === 'initialising' ? 'warning' : status === 'error' ? 'danger' : 'neutral'
-
 // ── Link geometry (HTML node anchors → SVG bezier paths) ──────────────────────
 const nodeEls = new Map<string, HTMLElement>()
 const networkRef = ref<HTMLElement | null>(null)
 const size = reactive({ w: 0, h: 0 })
 const links = ref<{ id: string; d: string; tone: string; bidirectional: boolean }[]>([])
 
-// Vue calls ref-functions before each update with stale nodes; clear first.
 onBeforeUpdate(() => nodeEls.clear())
 const setNodeRef = (id: string, el: unknown) => {
   if (el) nodeEls.set(id, el as HTMLElement)
@@ -306,7 +338,7 @@ watch(() => props.connections.map(c => c.id + c.status).join(','), scheduleCompu
 .cmap-headers,
 .cmap-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(180px, 0.8fr) 1fr;
+  grid-template-columns: 1fr minmax(200px, 0.9fr) 1fr;
   gap: $kui-space-100;
 }
 
@@ -394,9 +426,12 @@ watch(() => props.connections.map(c => c.id + c.status).join(','), scheduleCompu
   &--dim { color: $kui-color-text-neutral; }
 }
 
+// Next-action line on non-ready connection nodes (carries what alerts used to say)
 .cmap-node-action {
+  border-top: $kui-border-width-10 solid $kui-color-border;
   font-size: $kui-font-size-20;
   margin-top: $kui-space-20;
+  padding-top: $kui-space-30;
 
   &--warning { color: $kui-color-text-warning; }
   &--danger { color: $kui-color-text-danger; }
@@ -404,14 +439,21 @@ watch(() => props.connections.map(c => c.id + c.status).join(','), scheduleCompu
 }
 
 .cmap-network {
-  align-items: center;
   background-color: $kui-color-background-neutral-weakest;
   border: $kui-border-width-20 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
   display: flex;
   flex-direction: column;
-  gap: $kui-space-20;
+  gap: $kui-space-50;
   padding: $kui-space-60;
+  width: 100%;
+}
+
+.cmap-network-identity {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-10;
   text-align: center;
 }
 
@@ -432,10 +474,80 @@ watch(() => props.connections.map(c => c.id + c.status).join(','), scheduleCompu
   font-size: $kui-font-size-20;
 }
 
-.cmap-network-count {
+.cmap-network-gateways {
+  border-top: $kui-border-width-10 solid $kui-color-border;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-30;
+  padding-top: $kui-space-50;
+}
+
+.cmap-group-label {
   color: $kui-color-text-neutral;
+  font-size: $kui-font-size-10;
+  font-weight: $kui-font-weight-semibold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cmap-chip {
+  align-items: center;
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-20;
+  color: $kui-color-text;
+  display: flex;
   font-size: $kui-font-size-20;
-  margin-top: $kui-space-20;
+  gap: $kui-space-30;
+  padding: $kui-space-30 $kui-space-40;
+
+  &--button {
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease-in;
+
+    &:hover { border-color: $kui-color-border-primary; }
+  }
+}
+
+.cmap-chip-dot {
+  border-radius: $kui-border-radius-round;
+  flex-shrink: 0;
+  height: 8px;
+  width: 8px;
+
+  &--ready { background-color: var(--kui-color-text-success, #14b8a6); }
+  &--warning { background-color: var(--kui-color-text-warning, #b26b00); }
+  &--danger { background-color: var(--kui-color-text-danger, #d60a53); }
+}
+
+// DNS chip with a problem: tint the border + show the status label
+.cmap-chip--issue {
+  border-color: $kui-color-border-danger-weak;
+}
+
+.cmap-chip-status {
+  font-size: $kui-font-size-10;
+  font-weight: $kui-font-weight-semibold;
+
+  &--warning { color: $kui-color-text-warning; }
+  &--danger { color: $kui-color-text-danger; }
+  &--ready { color: $kui-color-text-success; }
+}
+
+.cmap-dns {
+  border-top: $kui-border-width-10 solid $kui-color-border;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-40;
+  margin-top: $kui-space-70;
+  padding-top: $kui-space-60;
+}
+
+.cmap-dns-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-40;
 }
 
 .cmap-empty {
@@ -450,7 +562,7 @@ watch(() => props.connections.map(c => c.id + c.status).join(','), scheduleCompu
   display: flex;
   flex-wrap: wrap;
   gap: $kui-space-60;
-  margin-top: $kui-space-80;
+  margin-top: $kui-space-70;
   padding-top: $kui-space-50;
 }
 

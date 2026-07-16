@@ -337,6 +337,18 @@ const networks = ref<Network[]>(initialNetworks)
 const connections = ref<Connection[]>(initialConnections)
 const gateways = ref<Gateway[]>(initialGateways)
 
+// Configuration captured by the gateway-creation wizard, surfaced on the
+// control-plane overview after creation (so captured config isn't thrown away).
+export interface GatewayConfig {
+  name: string
+  dataPlaneType: string
+  gatewayVersion: string
+  apiAccess: string
+  envVars: { scope: string; key: string; value: string }[]
+  deployments: { provider: CloudProvider; region: string; networkName: string }[]
+}
+const gatewayConfig = ref<GatewayConfig | null>(null)
+
 let nextNetworkIdx = 6
 let nextConnectionIdx = 7
 
@@ -380,7 +392,7 @@ export function useNetworksStore() {
   const createNetwork = (data: {
     name: string
     cloud: CloudProvider
-    regions: { region: string; cidr: string }[]
+    regions: { region: string; cidr: string; zones?: string[] }[]
     queuedConnections?: { type: ConnectionType; name: string; allowedConsumers: string[] }[]
   }) => {
     const newId = `net-${nextNetworkIdx++}`
@@ -526,7 +538,12 @@ export function useNetworksStore() {
     if (network?.dnsConfigs) network.dnsConfigs = network.dnsConfigs.filter(d => d.id !== id)
   }
 
+  const setGatewayConfig = (cfg: GatewayConfig) => { gatewayConfig.value = cfg }
+  const getGatewayConfig = () => gatewayConfig.value
+
   return {
+    setGatewayConfig,
+    getGatewayConfig,
     getNetworks,
     getNetworkById,
     getConnectionsByNetworkId,

@@ -12,29 +12,50 @@
     </template>
 
     <template #actions>
-      <template v-if="connection.status === 'ready'">
-        <KButton appearance="tertiary" @click="backToConnectivity">Back to connectivity</KButton>
-        <KButton appearance="tertiary" @click="copySetupValues">
-          <CopyIcon decorative />
-          Copy setup values
+      <KDropdown :kpop-attributes="{ placement: 'bottom-end' }">
+        <KButton
+          appearance="primary"
+          data-testid="connection-actions"
+        >
+          Actions
+          <ChevronDownIcon decorative />
         </KButton>
-        <KButton appearance="primary" @click="scrollToEvents">View events</KButton>
-      </template>
-      <template v-else-if="connection.status === 'error'">
-        <KButton appearance="primary" @click="checkStatus">Check status</KButton>
-        <KButton appearance="tertiary" @click="scrollToSetup">View setup values</KButton>
-        <KButton appearance="tertiary" @click="scrollToEvents">View events</KButton>
-      </template>
-      <template v-else>
-        <KButton appearance="primary" @click="checkStatus">Check status</KButton>
-        <KButton appearance="tertiary" @click="startEditAccounts">Edit allowed accounts</KButton>
-        <KButton appearance="danger" @click="handleDelete">Delete</KButton>
-      </template>
+        <template #items>
+          <KDropdownItem
+            v-if="connection.status !== 'ready'"
+            @click="checkStatus"
+          >
+            Check status
+          </KDropdownItem>
+          <KDropdownItem
+            v-if="isPending"
+            @click="startEditAccounts"
+          >
+            Edit allowed accounts
+          </KDropdownItem>
+          <KDropdownItem
+            v-if="hasSetupValues"
+            @click="copySetupValues"
+          >
+            Copy setup values
+          </KDropdownItem>
+          <KDropdownItem
+            danger
+            has-divider
+            @click="handleDelete"
+          >
+            Delete
+          </KDropdownItem>
+        </template>
+      </KDropdown>
     </template>
 
-    <p class="conn-subtitle">{{ connectionTypeLabel(connection.type) }} · {{ directionLabel(connection) }}</p>
-    <p class="conn-lastchecked">Last checked {{ timeAgo(connection.lastCheckedAt) }}</p>
+    <div class="conn-subheader">
+      <p class="conn-subtitle">{{ connectionTypeLabel(connection.type) }} · {{ directionLabel(connection) }}</p>
+      <p class="conn-lastchecked">Last checked {{ timeAgo(connection.lastCheckedAt) }}</p>
+    </div>
 
+    <div class="detail-stack">
     <!-- State banner -->
     <KAlert
       v-if="connection.status === 'ready'"
@@ -63,14 +84,29 @@
       <ConfigCardDisplay :property-collections="detailCollections" />
     </KCard>
 
-    <!-- Private DNS cross-reference (kept separate from connectivity) -->
+    <!-- Private DNS specific to THIS connection (not network-wide) -->
     <KCard
-      v-if="dnsCount > 0"
+      v-if="relatedDns.length > 0"
       title="Private DNS"
       data-testid="conn-private-dns"
     >
-      <p class="dns-ref">{{ dnsCount }} DNS configuration{{ dnsCount === 1 ? '' : 's' }} available for this network.</p>
-      <a class="row-action" href="#" @click.prevent="viewPrivateDns">View private DNS</a>
+      <p class="dns-ref">Private DNS resolved through this connection.</p>
+      <table class="rows-table">
+        <thead>
+          <tr>
+            <th>Name / domain</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="dns in relatedDns" :key="dns.id">
+            <td class="details-cell">{{ dns.name }}</td>
+            <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
+            <td><a class="row-action" href="#" @click.prevent="viewDns(dns.id)">View</a></td>
+          </tr>
+        </tbody>
+      </table>
     </KCard>
 
     <!-- Setup values -->
@@ -131,6 +167,7 @@
         </tbody>
       </table>
     </KCard>
+    </div>
   </PageLayout>
 
   <div v-else class="not-found">
@@ -156,12 +193,14 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CopyIcon } from '@kong/icons'
+import { CopyIcon, ChevronDownIcon } from '@kong/icons'
 import {
   KAlert,
   KBadge,
   KButton,
   KCard,
+  KDropdown,
+  KDropdownItem,
   KEmptyState,
   KModal,
   KTextArea,
@@ -275,16 +314,6 @@ const copySetupValues = () => {
   copyToClipboard(text)
 }
 
-const scrollToSetup = () => {
-  const el = setupCardRef.value?.$el as HTMLElement | undefined
-  el?.scrollIntoView({ behavior: 'smooth' })
-}
-
-const scrollToEvents = () => {
-  const el = eventsCardRef.value?.$el as HTMLElement | undefined
-  el?.scrollIntoView({ behavior: 'smooth' })
-}
-
 const checkStatus = () => {
   // Prototype: no-op status re-check.
 }
@@ -303,9 +332,14 @@ const saveAccounts = () => {
   editingAccounts.value = false
 }
 
-const dnsCount = computed(() => network.value?.dnsConfigs?.length ?? 0)
-const viewPrivateDns = () => {
-  router.push({ name: 'networks-detail', params: { id: networkId.value }, hash: '#dns' })
+// DNS specific to this connection — via the dnsConfig.relatedConnectionId link.
+const relatedDns = computed(() =>
+  (network.value?.dnsConfigs ?? []).filter(d => d.relatedConnectionId === connId.value),
+)
+const dnsStatusLabel = (status: string) => status === 'error' ? 'Error' : status === 'pending' ? 'Pending' : 'Ready'
+const dnsStatusBadge = (status: string) => status === 'error' ? 'danger' : status === 'pending' ? 'warning' : 'success'
+const viewDns = (dnsId: string) => {
+  router.push({ name: 'networks-dns-detail', params: { id: networkId.value, dnsId } })
 }
 
 const backToConnectivity = () => {
@@ -328,6 +362,12 @@ const confirmDelete = () => {
 <style scoped lang="scss">
 @use "@kong/design-tokens/tokens/scss/variables" as *;
 
+.conn-subheader {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-20;
+}
+
 .conn-subtitle {
   color: $kui-color-text-neutral-stronger;
   font-size: $kui-font-size-30;
@@ -338,6 +378,12 @@ const confirmDelete = () => {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-20;
   margin: $kui-space-0;
+}
+
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-80;
 }
 
 .setup-values {
@@ -410,7 +456,8 @@ const confirmDelete = () => {
     border-top: $kui-border-width-10 solid $kui-color-border;
     color: $kui-color-text;
     font-size: $kui-font-size-30;
-    padding: $kui-space-50;
+    padding: $kui-space-60 $kui-space-50;
+    vertical-align: middle;
   }
 
   .details-cell { color: $kui-color-text-neutral-stronger; }

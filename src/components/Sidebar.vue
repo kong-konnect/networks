@@ -87,70 +87,19 @@
               </details>
             </li>
 
-            <!-- Networks — expandable with sub-pages when inside a network detail -->
+            <!-- Networks — single direct link (no sub-nav) -->
             <li>
-              <details
-                class="sidebar-item-details"
-                :open="isNetworksExpanded"
-                @toggle="(e: ToggleEvent) => onToggleExpanded('networks', (e.target as HTMLDetailsElement).open)"
-              >
-                <summary
+              <router-link v-slot="{ navigate, href }" custom :to="{ name: 'networks-list' }">
+                <a
                   class="sidebar-item"
-                  :class="{ active: !isNetworksExpanded && isNetworksActive }"
+                  :class="{ active: isNetworksActive }"
+                  :href="href"
+                  @click="navigate"
                 >
                   <ConnectionsIcon class="sidebar-item-icon" decorative :size="KUI_ICON_SIZE_40" />
                   <span class="sidebar-item-label">Networks</span>
-                  <ChevronRightIcon
-                    class="sidebar-item-chevron-icon"
-                    :class="{ expanded: isNetworksExpanded }"
-                    decorative
-                    :size="KUI_ICON_SIZE_40"
-                  />
-                </summary>
-
-                <ul class="sidebar-item-details-list">
-                  <li>
-                    <router-link v-slot="{ navigate, href }" custom :to="{ name: 'networks-list' }">
-                      <a
-                        class="sidebar-item"
-                        :class="{ active: route.name === 'networks-list' || route.name === 'networks-health' || route.name === 'networks-create' }"
-                        :href="href"
-                        @click="navigate"
-                      >
-                        <span class="sidebar-item-label">All networks</span>
-                      </a>
-                    </router-link>
-                  </li>
-                  <li v-if="isNetworksDetailActive">
-                    <router-link v-slot="{ navigate, href }" custom :to="{ name: 'networks-detail', params: { id: route.params.id } }">
-                      <a
-                        class="sidebar-item"
-                        :class="{ active: route.name === 'networks-detail' }"
-                        :href="href"
-                        @click="navigate"
-                      >
-                        <span class="sidebar-item-label">Overview</span>
-                      </a>
-                    </router-link>
-                  </li>
-                  <li v-if="isNetworksDetailActive">
-                    <router-link v-slot="{ navigate, href }" custom :to="{ name: 'networks-detail', params: { id: route.params.id }, hash: '#connectivity' }">
-                      <a
-                        class="sidebar-item"
-                        :href="href"
-                        @click="navigate"
-                      >
-                        <span class="sidebar-item-label">Private connectivity</span>
-                      </a>
-                    </router-link>
-                  </li>
-                  <li v-if="isNetworksDetailActive">
-                    <a class="sidebar-item" href="#">
-                      <span class="sidebar-item-label">Private DNS</span>
-                    </a>
-                  </li>
-                </ul>
-              </details>
+                </a>
+              </router-link>
             </li>
 
             <!-- Direct link (no children) — matches production "L1 without children" branch -->
@@ -428,7 +377,8 @@ const isApiGatewayActive = computed(() =>
 )
 
 const isNetworksActive = computed(() =>
-  ['networks-list', 'networks-health', 'networks-create', 'networks-detail', 'networks-add-connection'].includes(route.name as string),
+  ['networks-list', 'networks-create', 'networks-detail', 'networks-add-connection',
+    'networks-connection-detail', 'networks-dns-detail', 'networks-test-endpoint'].includes(route.name as string),
 )
 
 const isNetworksDetailActive = computed(() =>
