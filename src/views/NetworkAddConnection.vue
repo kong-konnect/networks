@@ -42,7 +42,6 @@
             <span class="method-name">{{ method.label }}</span>
             <span class="method-usewhen">{{ method.useWhen }}</span>
             <div class="method-tags">
-              <span class="method-tag">{{ method.direction }}</span>
               <span class="method-tag method-tag--dim">{{ method.scope }}</span>
             </div>
           </div>
@@ -166,7 +165,6 @@ interface Method {
   type: ConnectionType
   label: string
   useWhen: string
-  direction: string
   scope: string
   family: ConnectionFamily
   dir: ConnectionDirection
@@ -179,7 +177,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'aws-rep-ingress',
       label: 'Resource endpoint ingress',
       useWhen: 'Customer clients need to reach Kong privately without peering',
-      direction: 'Customer → Kong',
       scope: 'Service-level',
       family: 'private-endpoint',
       dir: 'ingress',
@@ -189,7 +186,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'aws-rep-egress',
       label: 'Resource endpoint egress',
       useWhen: 'Kong needs to reach customer upstreams privately',
-      direction: 'Kong → upstream',
       scope: 'Service-level',
       family: 'private-endpoint',
       dir: 'egress',
@@ -199,7 +195,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'aws-vpc-peering',
       label: 'VPC peering',
       useWhen: 'Full VPC-level routing',
-      direction: 'Bidirectional',
       scope: 'Network-level',
       family: 'peering',
       dir: 'egress',
@@ -209,7 +204,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'aws-transit-gateway',
       label: 'Transit Gateway',
       useWhen: 'Hub-based routing across VPCs',
-      direction: 'Bidirectional',
       scope: 'Network-level',
       family: 'peering',
       dir: 'egress',
@@ -221,7 +215,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'gcp-psc-ingress',
       label: 'GCP PSC ingress',
       useWhen: 'Customer clients need to reach Kong privately',
-      direction: 'Customer → Kong',
       scope: 'Service-level',
       family: 'private-endpoint',
       dir: 'ingress',
@@ -231,7 +224,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'gcp-psc-egress',
       label: 'GCP PSC egress',
       useWhen: 'Kong needs to reach customer upstreams privately',
-      direction: 'Kong → upstream',
       scope: 'Service-level',
       family: 'private-endpoint',
       dir: 'egress',
@@ -241,7 +233,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'gcp-vpc-peering',
       label: 'VPC peering',
       useWhen: 'Full VPC-level routing',
-      direction: 'Bidirectional',
       scope: 'Network-level',
       family: 'peering',
       dir: 'egress',
@@ -253,7 +244,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'azure-private-link-ingress',
       label: 'Private Link ingress',
       useWhen: 'Customer clients need to reach Kong privately',
-      direction: 'Customer → Kong',
       scope: 'Service-level',
       family: 'private-endpoint',
       dir: 'ingress',
@@ -263,7 +253,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'azure-private-endpoint-egress',
       label: 'Private endpoint egress',
       useWhen: 'Kong needs to reach customer upstreams privately',
-      direction: 'Kong → upstream',
       scope: 'Service-level',
       family: 'private-endpoint',
       dir: 'egress',
@@ -273,7 +262,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'azure-vnet-peering',
       label: 'VNet peering',
       useWhen: 'Full VNet-level routing',
-      direction: 'Bidirectional',
       scope: 'Network-level',
       family: 'peering',
       dir: 'egress',
@@ -283,7 +271,6 @@ const methodsByCloud: Record<CloudProvider, Method[]> = {
       type: 'azure-virtual-hub',
       label: 'Virtual hub',
       useWhen: 'Hub-based routing across VNets',
-      direction: 'Bidirectional',
       scope: 'Network-level',
       family: 'peering',
       dir: 'egress',

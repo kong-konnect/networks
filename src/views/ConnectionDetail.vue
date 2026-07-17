@@ -51,7 +51,7 @@
     </template>
 
     <div class="conn-subheader">
-      <p class="conn-subtitle">{{ connectionTypeLabel(connection.type) }} · {{ directionLabel(connection) }}</p>
+      <p class="conn-subtitle">{{ connectionTypeLabel(connection.type) }}</p>
       <p class="conn-lastchecked">Last checked {{ timeAgo(connection.lastCheckedAt) }}</p>
     </div>
 
@@ -210,7 +210,6 @@ import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import {
   connectionTypeLabel,
-  directionLabel,
   scopeLabel,
   statusLabel,
   statusBadgeAppearance,
@@ -268,7 +267,6 @@ const detailCollections = computed(() => {
     {
       items: [
         { key: 'type', label: 'Type', value: connectionTypeLabel(connection.value.type), type: 'plain' as const },
-        { key: 'direction', label: 'Direction', value: directionLabel(connection.value), type: 'plain' as const },
         { key: 'scope', label: 'Scope', value: scopeLabel(connection.value), type: 'plain' as const },
         { key: 'network', label: 'Network', value: network.value.name, type: 'plain' as const },
         { key: 'provider', label: 'Provider', value: connection.value.cloud.toUpperCase(), type: 'plain' as const },
