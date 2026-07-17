@@ -636,9 +636,11 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 // ── Trace picker ──────────────────────────────────────────────────────────────
 .ncm-trace-picker {
   align-items: center;
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
   display: flex;
   flex-wrap: wrap;
   gap: $kui-space-40 $kui-space-50;
+  padding-bottom: $kui-space-60;
 }
 
 .ncm-trace-label {
