@@ -1,418 +1,324 @@
 <template>
   <PageLayout
-    title="New network"
+    :breadcrumbs="[{ key: 'networks', text: 'Networks', to: { name: 'networks-list' } }]"
+    title="Create network"
     :back-to="{ name: 'networks-list' }"
   >
     <div class="network-create">
-      <KStepper
-        :steps="steps"
-        :current-step-index="currentStep"
+      <!-- Orientation (not a blocking gate) -->
+      <KAlert
+        appearance="info"
+        message="A network is provisioned by Kong and takes 45 minutes or more to become ready. Region and CIDR range are permanent — they can't be changed after creation."
       />
 
-      <!-- Step 0: Before you begin -->
-      <div v-if="currentStep === 0" class="step-content">
-        <KCard title="Before you begin">
-          <div class="orientation-content">
-            <p>A <strong>network</strong> is a private, isolated network hosted by Kong that connects your cloud environment to Kong Gateway. It enables private connectivity without exposing traffic to the public internet.</p>
-
-            <h3>What to know before creating a network</h3>
-            <ul>
-              <li><strong>Provisioning takes time.</strong> Creating a network takes 45 minutes or more. Plan accordingly.</li>
-              <li><strong>Region is permanent.</strong> You cannot change a network's region after creation. Choose carefully.</li>
-              <li><strong>CIDR is permanent.</strong> The IP address range (CIDR) cannot be changed after creation. If it overlaps with your existing infrastructure, you will need to delete and recreate the network.</li>
-              <li><strong>Cost.</strong> Networks incur charges while running. Delete unused networks to avoid unnecessary spend.</li>
-            </ul>
-
-            <h3>What happens after you create a network</h3>
-            <ol>
-              <li>Kong provisions the network infrastructure in your chosen region (45+ minutes).</li>
-              <li>You can attach API gateways to the network.</li>
-              <li>You can configure private connections to allow traffic between your cloud and Kong.</li>
-            </ol>
-          </div>
-        </KCard>
-        <div class="step-actions">
-          <KButton appearance="primary" @click="currentStep = 1">I understand, continue</KButton>
-        </div>
-      </div>
-
-      <!-- Step 1: Cloud and regions -->
-      <div v-if="currentStep === 1" class="step-content">
-        <KCard title="Cloud provider and regions">
-          <div class="form-group">
-            <KLabel>Cloud provider</KLabel>
-            <div class="cloud-radio-group">
-              <label
-                v-for="cloud in cloudOptions"
-                :key="cloud.value"
-                class="cloud-radio-card"
-                :class="{ selected: form.cloud === cloud.value }"
-              >
-                <input
-                  v-model="form.cloud"
-                  type="radio"
-                  :value="cloud.value"
-                  class="cloud-radio-input"
-                  @change="form.regions = [{ region: '', cidr: '' }]"
-                >
-                <span class="cloud-radio-label">{{ cloud.label }}</span>
-              </label>
-            </div>
+      <section class="form-card" data-testid="network-create-form">
+        <!-- Network details -->
+        <div class="form-section">
+          <div class="section-heading">
+            <h2 class="section-title">Network details</h2>
+            <p class="section-help">A network is single-cloud and single-region. Add private connectivity and DNS after it's ready.</p>
           </div>
 
           <div class="form-group">
-            <KLabel>Regions</KLabel>
-            <p class="field-help">Add one or more regions. Each region requires a unique CIDR block.</p>
-
-            <div
-              v-for="(regionEntry, idx) in form.regions"
-              :key="idx"
-              class="region-row"
-            >
-              <KSelect
-                v-model="form.regions[idx].region"
-                :items="regionOptionsForCloud"
-                :placeholder="'Select region'"
-                class="region-select"
-              />
-              <KInput
-                v-model="form.regions[idx].cidr"
-                class="cidr-input"
-                placeholder="e.g., 10.0.0.0/16"
-                :error="!!cidrErrors[idx]"
-                :error-message="cidrErrors[idx]"
-                @update:model-value="validateCidr(idx)"
-              />
-              <KButton
-                v-if="form.regions.length > 1"
-                appearance="tertiary"
-                @click="removeRegion(idx)"
-              >
-                <TrashIcon decorative />
-              </KButton>
-            </div>
-
-            <KButton appearance="tertiary" @click="addRegion">
-              <AddIcon decorative />
-              Add another region
-            </KButton>
-          </div>
-        </KCard>
-        <div class="step-actions">
-          <KButton appearance="tertiary" @click="currentStep = 0">Back</KButton>
-          <KButton appearance="primary" :disabled="!step1Valid" @click="currentStep = 2">Continue</KButton>
-        </div>
-      </div>
-
-      <!-- Step 2: Name -->
-      <div v-if="currentStep === 2" class="step-content">
-        <KCard title="Network name">
-          <div class="form-group">
-            <KLabel>Name</KLabel>
-            <p class="field-help">Choose a unique name for this network. Names must be unique within your organization, region, and cloud provider.</p>
+            <KLabel :required="true">Network name</KLabel>
             <KInput
-              v-model="form.name"
-              placeholder="e.g., aws-us-east-prod"
-              :error="nameError !== ''"
+              v-model.trim="form.name"
+              data-testid="network-name"
+              placeholder="e.g., production-us-east"
+              width="100%"
+              :error="!!nameError"
               :error-message="nameError"
               @update:model-value="validateName"
             />
           </div>
-        </KCard>
-        <div class="step-actions">
-          <KButton appearance="tertiary" @click="currentStep = 1">Back</KButton>
-          <KButton appearance="primary" :disabled="!step2Valid" @click="currentStep = 3">Continue</KButton>
         </div>
-      </div>
 
-      <!-- Step 3: Private connectivity (optional) -->
-      <div v-if="currentStep === 3" class="step-content">
-        <KCard title="Private connectivity (optional)">
-          <p class="field-help">
-            Queue connections to be created automatically once your network is ready.
-            You can also skip this and add connections later.
-          </p>
+        <hr class="divider">
 
-          <div
-            v-for="(qc, idx) in form.queuedConnections"
-            :key="idx"
-            class="queued-connection-card"
-          >
-            <div class="queued-connection-header">
-              <span class="queued-connection-title">{{ formatConnectionType(qc.type) || 'New connection' }}</span>
-              <KButton appearance="tertiary" @click="removeQueuedConnection(idx)">
-                <TrashIcon decorative />
-                Remove
-              </KButton>
-            </div>
+        <!-- Location -->
+        <div class="form-section">
+          <div class="section-heading">
+            <h2 class="section-title">Provider and region</h2>
+            <p class="section-help">Choose where Kong provisions this network.</p>
+          </div>
+
+          <div class="two-col">
             <div class="form-group">
-              <KLabel>Connection type</KLabel>
+              <KLabel :required="true">Provider</KLabel>
               <KSelect
-                v-model="form.queuedConnections[idx].type"
-                :items="connectionTypeOptions"
-                placeholder="Select type"
-              />
+                v-model="form.cloud"
+                :items="providerOptions"
+                data-testid="network-provider"
+                reuse-item-template
+                width="100%"
+                @change="onProviderChange"
+              >
+                <template #item-template="{ item }">
+                  <span class="select-item">
+                    <component :is="providerIcon(item.value as string)" :size="KUI_ICON_SIZE_30" decorative />
+                    {{ item.label }}
+                  </span>
+                </template>
+              </KSelect>
             </div>
             <div class="form-group">
-              <KLabel>Name</KLabel>
-              <KInput v-model="form.queuedConnections[idx].name" placeholder="e.g., my-vpc-peer" />
-            </div>
-            <div class="form-group">
-              <KLabel>Allowed consumers</KLabel>
-              <p class="field-help">Enter one consumer identifier per line (e.g., AWS account ID, GCP project).</p>
-              <KTextArea
-                :model-value="form.queuedConnections[idx].allowedConsumers.join('\n')"
-                :rows="3"
-                placeholder="One consumer per line"
-                @update:model-value="(v: string) => form.queuedConnections[idx].allowedConsumers = v.split('\n').map((s: string) => s.trim()).filter(Boolean)"
-              />
+              <KLabel :required="true">Region</KLabel>
+              <KSelect
+                v-model="form.region"
+                :items="regionOptions"
+                data-testid="network-region"
+                placeholder="Select a region"
+                reuse-item-template
+                width="100%"
+                @change="onRegionChange"
+              >
+                <template #item-template="{ item }">
+                  <span class="select-item">
+                    <component :is="regionFlag(item.value as string)" :size="KUI_ICON_SIZE_30" decorative />
+                    {{ item.label }}
+                  </span>
+                </template>
+              </KSelect>
             </div>
           </div>
-
-          <KButton appearance="tertiary" @click="addQueuedConnection">
-            <AddIcon decorative />
-            Add a connection
-          </KButton>
-        </KCard>
-        <div class="step-actions">
-          <KButton appearance="tertiary" @click="currentStep = 2">Back</KButton>
-          <KButton appearance="tertiary" @click="currentStep = 4">Skip</KButton>
-          <KButton appearance="primary" @click="currentStep = 4">Continue</KButton>
         </div>
-      </div>
 
-      <!-- Step 4: Review -->
-      <div v-if="currentStep === 4" class="step-content">
-        <KCard title="Review">
-          <div class="review-section">
-            <h3 class="review-section-title">Cloud and regions</h3>
-            <div class="review-row">
-              <span class="review-label">Cloud</span>
-              <KBadge :appearance="cloudBadgeAppearance(form.cloud)">{{ form.cloud.toUpperCase() }}</KBadge>
-            </div>
-            <div
-              v-for="r in form.regions"
-              :key="r.region"
-              class="review-row"
+        <hr class="divider">
+
+        <!-- Network range -->
+        <div class="form-section">
+          <div class="section-heading">
+            <h2 class="section-title">Network range</h2>
+            <p class="section-help">The CIDR block for this network's Dedicated Cloud Gateway.</p>
+          </div>
+
+          <div class="form-group">
+            <KLabel :required="true">CIDR range</KLabel>
+            <KInput
+              v-model.trim="form.cidr"
+              data-testid="network-cidr"
+              placeholder="e.g., 10.0.0.0/16"
+              width="100%"
+              :error="!!cidrError"
+              :error-message="cidrError"
+              @update:model-value="validateCidr"
+            />
+            <button
+              type="button"
+              class="cidr-help-toggle"
+              data-testid="cidr-help-toggle"
+              @click="showCidrHelp = !showCidrHelp"
             >
-              <span class="review-label">Region</span>
-              <span>{{ r.region }} — <code>{{ r.cidr }}</code></span>
+              <component :is="showCidrHelp ? ChevronUpIcon : ChevronDownIcon" :size="KUI_ICON_SIZE_20" decorative />
+              {{ showCidrHelp ? 'Hide CIDR help' : 'Show CIDR help' }}
+            </button>
+            <div v-if="showCidrHelp" class="cidr-help">
+              <p class="cidr-help-title">Notes when selecting your CIDR block:</p>
+              <p>A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. To prevent conflicts, this CIDR block should not overlap with CIDR blocks assigned in your own Cloud Service Provider (CSP) networks.</p>
+              <p class="cidr-help-subtitle">CIDR requirements</p>
+              <ul>
+                <li><strong>Prefix length:</strong> the CIDR block must have a prefix length between /16 and /23. /23 blocks are only supported up to 3 availability zones.</li>
+                <li><strong>Private IP range:</strong> the entire CIDR block must fall within one of these private IP ranges: 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, 198.18.0.0/15.</li>
+              </ul>
+              <p class="cidr-help-subtitle">Restrictions</p>
+              <ul>
+                <li>Your CIDR block must not overlap with any IP ranges already in use by your organization. Overlapping ranges can prevent VPC peering from working correctly.</li>
+                <li>It must not overlap with these reserved ranges: 10.100.0.0/16, 172.17.0.0/16.</li>
+              </ul>
             </div>
           </div>
+        </div>
 
-          <div class="review-section">
-            <h3 class="review-section-title">Name</h3>
-            <div class="review-row">
-              <span class="review-label">Name</span>
-              <span>{{ form.name }}</span>
-            </div>
+        <hr class="divider">
+
+        <!-- Zone placements -->
+        <div class="form-section">
+          <div class="section-heading">
+            <h2 class="section-title">Zone placements</h2>
+            <p class="section-help">Your network is deployed across these availability zones. Select at least 2 for resilience.</p>
           </div>
 
-          <div v-if="form.queuedConnections.length > 0" class="review-section">
-            <h3 class="review-section-title">Queued connections</h3>
+          <div class="form-group">
             <div
-              v-for="qc in form.queuedConnections"
-              :key="qc.type"
-              class="review-row"
+              v-if="form.region"
+              class="zone-box"
+              data-testid="zone-box"
             >
-              <span class="review-label">{{ formatConnectionType(qc.type) }}</span>
-              <span>{{ qc.name }}</span>
+              <KCheckbox
+                v-for="zone in regionZones(form.region)"
+                :key="zone"
+                :model-value="form.zones.includes(zone)"
+                :data-testid="`zone-${zone}`"
+                @update:model-value="toggleZone(zone)"
+              >
+                {{ zone }}
+              </KCheckbox>
             </div>
+            <p v-else class="field-help">Select a region to choose zone placements.</p>
+            <p
+              v-if="form.region && form.zones.length < 2"
+              class="zone-error"
+              data-testid="zone-error"
+            >
+              Select at least 2 zones.
+            </p>
           </div>
+        </div>
+      </section>
 
-          <KAlert
-            appearance="info"
-            message="Provisioning takes 45 minutes or more. The network will appear as 'Initialising' until it is ready."
+      <footer class="create-footer">
+        <KButton
+          appearance="tertiary"
+          data-testid="network-cancel"
+          @click="router.push({ name: 'networks-list' })"
+        >
+          Cancel
+        </KButton>
+        <KButton
+          appearance="primary"
+          :disabled="!canCreate || isSubmitting"
+          data-testid="network-create-button"
+          @click="handleCreate"
+        >
+          <ProgressIcon
+            v-if="isSubmitting"
+            class="btn-spinner"
+            :size="KUI_ICON_SIZE_20"
+            decorative
           />
-        </KCard>
-        <div class="step-actions">
-          <KButton appearance="tertiary" @click="currentStep = 3">Back</KButton>
-          <KButton appearance="primary" :disabled="isSubmitting" @click="handleCreate">
-            Create network
-          </KButton>
-        </div>
-      </div>
+          {{ isSubmitting ? 'Creating network…' : 'Create network' }}
+        </KButton>
+      </footer>
     </div>
   </PageLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  AddIcon,
-  TrashIcon,
-} from '@kong/icons'
+import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
+import { ChevronDownIcon, ChevronUpIcon, ProgressIcon } from '@kong/icons'
 import {
   KAlert,
-  KBadge,
   KButton,
-  KCard,
+  KCheckbox,
   KInput,
   KLabel,
   KSelect,
-  KStepper,
-  KTextArea,
+  ToastManager,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import type { CloudProvider, ConnectionType } from '@/types'
+import { providerIcon, regionFlag, regionLabel } from '@/utils/regionDisplay'
+import type { CloudProvider } from '@/types'
 
 const router = useRouter()
 const store = useNetworksStore()
 
-const currentStep = ref(0)
-const isSubmitting = ref(false)
-const nameError = ref('')
+const toaster = new ToastManager()
+onBeforeUnmount(() => toaster.destroy())
 
-const steps = [
-  { label: 'Before you begin' },
-  { label: 'Cloud and regions' },
-  { label: 'Name' },
-  { label: 'Private connectivity' },
-  { label: 'Review' },
-]
-
+const DEFAULT_REGION = 'us-east-1'
 const form = reactive({
-  cloud: 'aws' as CloudProvider,
-  regions: [{ region: '', cidr: '' }],
   name: '',
-  queuedConnections: [] as { type: ConnectionType; name: string; allowedConsumers: string[] }[],
+  cloud: 'aws' as CloudProvider,
+  region: DEFAULT_REGION,
+  cidr: '',
+  zones: ['a', 'b', 'c'].map(s => `${DEFAULT_REGION}${s}`),
 })
 
-const cidrErrors = reactive<Record<number, string>>({})
+const nameError = ref('')
+const cidrError = ref('')
+const showCidrHelp = ref(false)
+const isSubmitting = ref(false)
 
-const cloudOptions = [
+const providerOptions = [
   { label: 'AWS', value: 'aws' },
   { label: 'GCP', value: 'gcp' },
   { label: 'Azure', value: 'azure' },
 ]
 
-const awsRegions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1', 'eu-central-1', 'ap-southeast-1', 'ap-northeast-1']
-const gcpRegions = ['us-central1', 'us-east1', 'us-west1', 'europe-west1', 'europe-west4', 'asia-east1', 'asia-southeast1']
-const azureRegions = ['eastus', 'eastus2', 'westus', 'westus2', 'westeurope', 'northeurope', 'southeastasia']
-
-const regionOptionsForCloud = computed(() => {
-  const regMap: Record<CloudProvider, string[]> = {
-    aws: awsRegions,
-    gcp: gcpRegions,
-    azure: azureRegions,
-  }
-  return (regMap[form.cloud] || []).map(r => ({ label: r, value: r }))
-})
-
-const connectionTypesByCloud: Record<CloudProvider, ConnectionType[]> = {
-  aws: ['aws-vpc-peering', 'aws-transit-gateway', 'aws-rep-ingress', 'aws-rep-egress'],
-  gcp: ['gcp-vpc-peering', 'gcp-psc-ingress', 'gcp-psc-egress'],
-  azure: ['azure-vnet-peering', 'azure-virtual-hub', 'azure-private-link-ingress', 'azure-private-endpoint-egress'],
+const regionsByProvider: Record<CloudProvider, string[]> = {
+  aws: ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'],
+  gcp: ['us-central1', 'us-east1', 'us-west1', 'europe-west1', 'asia-southeast1'],
+  azure: ['eastus', 'eastus2', 'westus', 'westeurope', 'southeastasia'],
 }
-
-const connectionTypeOptions = computed(() =>
-  (connectionTypesByCloud[form.cloud] || []).map(t => ({
-    label: formatConnectionType(t),
-    value: t,
-  })),
+const regionOptions = computed(() =>
+  regionsByProvider[form.cloud].map(r => ({ label: regionLabel(r), value: r })),
 )
 
-const validateCidr = (idx: number) => {
-  const cidr = form.regions[idx]?.cidr || ''
-  const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
-  if (!cidr) {
-    cidrErrors[idx] = 'CIDR is required.'
-    return
-  }
-  if (!cidrRegex.test(cidr)) {
-    cidrErrors[idx] = 'Must be a valid CIDR notation (e.g., 10.0.0.0/16).'
-    return
-  }
-  // Check for overlap with existing networks
-  const existingCidrs = store.getNetworks().flatMap(n => n.regions.map(r => r.cidr))
-  if (existingCidrs.includes(cidr)) {
-    cidrErrors[idx] = 'This CIDR overlaps with an existing network.'
-    return
-  }
-  delete cidrErrors[idx]
+// Availability zones per region (prototype: 3 per region).
+const regionZones = (region: string): string[] =>
+  region ? ['a', 'b', 'c'].map(s => `${region}${s}`) : []
+
+const onProviderChange = () => {
+  form.region = regionsByProvider[form.cloud][0]
+  form.zones = regionZones(form.region)
+  validateCidr()
+}
+const onRegionChange = () => {
+  // Default to all zones in the region (>=2 satisfied); user can trim.
+  form.zones = regionZones(form.region)
+}
+const toggleZone = (zone: string) => {
+  form.zones = form.zones.includes(zone)
+    ? form.zones.filter(z => z !== zone)
+    : [...form.zones, zone]
 }
 
 const validateName = () => {
   const name = form.name.trim()
   if (!name) {
-    nameError.value = 'Name is required.'
+    nameError.value = 'Enter a network name.'
     return
   }
-  const exists = store.getNetworks().some(n => n.name === name)
-  if (exists) {
+  if (store.getNetworks().some(n => n.name === name)) {
     nameError.value = 'A network with this name already exists.'
     return
   }
   nameError.value = ''
 }
 
-const step1Valid = computed(() => {
-  return form.cloud &&
-    form.regions.every(r => r.region && r.cidr) &&
-    Object.keys(cidrErrors).length === 0
-})
-
-const step2Valid = computed(() => form.name.trim() !== '' && nameError.value === '')
-
-const addRegion = () => {
-  form.regions.push({ region: '', cidr: '' })
-}
-
-const removeRegion = (idx: number) => {
-  form.regions.splice(idx, 1)
-  delete cidrErrors[idx]
-}
-
-const addQueuedConnection = () => {
-  form.queuedConnections.push({
-    type: connectionTypesByCloud[form.cloud][0],
-    name: '',
-    allowedConsumers: [],
-  })
-}
-
-const removeQueuedConnection = (idx: number) => {
-  form.queuedConnections.splice(idx, 1)
-}
-
-const formatConnectionType = (type: ConnectionType | ''): string => {
-  if (!type) return ''
-  const labels: Record<ConnectionType, string> = {
-    'aws-vpc-peering': 'AWS VPC Peering',
-    'aws-transit-gateway': 'AWS Transit Gateway',
-    'aws-rep-egress': 'AWS REP Egress',
-    'aws-rep-ingress': 'AWS REP Ingress',
-    'gcp-vpc-peering': 'GCP VPC Peering',
-    'gcp-psc-ingress': 'GCP PSC Ingress',
-    'gcp-psc-egress': 'GCP PSC Egress',
-    'azure-vnet-peering': 'Azure VNET Peering',
-    'azure-virtual-hub': 'Azure Virtual Hub',
-    'azure-private-link-ingress': 'Azure Private Link Ingress',
-    'azure-private-endpoint-egress': 'Azure Private Endpoint Egress',
+const validateCidr = () => {
+  const cidr = form.cidr.trim()
+  if (!cidr) {
+    cidrError.value = ''
+    return
   }
-  return labels[type] || type
+  if (!/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(cidr)) {
+    cidrError.value = 'Enter a valid CIDR (e.g., 10.0.0.0/16).'
+    return
+  }
+  const existing = store.getNetworks().flatMap(n => n.regions.map(r => r.cidr))
+  if (existing.includes(cidr)) {
+    cidrError.value = 'This CIDR overlaps with an existing network.'
+    return
+  }
+  cidrError.value = ''
 }
 
-const cloudBadgeAppearance = (cloud: string) => {
-  if (cloud === 'aws') return 'warning'
-  if (cloud === 'gcp') return 'info'
-  if (cloud === 'azure') return 'decorative-purple'
-  return 'neutral'
-}
+const canCreate = computed(() =>
+  form.name.trim() !== '' && !nameError.value &&
+  !!form.region &&
+  form.cidr.trim() !== '' && !cidrError.value &&
+  form.zones.length >= 2,
+)
 
-const handleCreate = async () => {
+const handleCreate = () => {
+  if (!canCreate.value || isSubmitting.value) return
   isSubmitting.value = true
-  await new Promise(resolve => setTimeout(resolve, 400))
-  store.createNetwork({
-    name: form.name.trim(),
-    cloud: form.cloud,
-    regions: form.regions.filter(r => r.region && r.cidr),
-    queuedConnections: form.queuedConnections.filter(qc => qc.type && qc.name),
-  })
-  isSubmitting.value = false
-  router.push({ name: 'networks-list' })
+  // Brief provisioning kick-off, then land on the new network (initialising) so the
+  // user sees provisioning + the next steps to configure connectivity and DNS.
+  setTimeout(() => {
+    const network = store.createNetwork({
+      name: form.name.trim(),
+      cloud: form.cloud,
+      regions: [{ region: form.region, cidr: form.cidr.trim(), zones: form.zones }],
+    })
+    isSubmitting.value = false
+    toaster.open({ appearance: 'success', message: 'Network created. Provisioning can take 45 minutes or more.' })
+    router.push({ name: 'networks-detail', params: { id: network.id } })
+  }, 700)
 }
 </script>
 
@@ -423,152 +329,139 @@ const handleCreate = async () => {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
-  max-width: 720px;
+  max-width: 760px;
 }
 
-.step-content {
+.form-card {
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-70;
+  padding: $kui-space-80;
+}
+
+.divider {
+  border: none;
+  border-top: $kui-border-width-10 solid $kui-color-border;
+  margin: $kui-space-0;
+}
+
+.form-section {
   display: flex;
   flex-direction: column;
   gap: $kui-space-60;
 }
 
-.step-actions {
-  display: flex;
-  gap: $kui-space-40;
-}
-
-.orientation-content {
-  p {
-    color: $kui-color-text-neutral;
-    line-height: $kui-line-height-40;
-    margin: $kui-space-0 $kui-space-0 $kui-space-50;
-  }
-
-  h3 {
-    font-size: $kui-font-size-40;
-    font-weight: $kui-font-weight-semibold;
-    margin: $kui-space-70 $kui-space-0 $kui-space-40;
-  }
-
-  ul, ol {
-    color: $kui-color-text-neutral;
-    line-height: $kui-line-height-50;
-    padding-left: $kui-space-80;
-  }
-
-  li { margin-bottom: $kui-space-30; }
-}
-
-.form-group {
+.section-heading {
   display: flex;
   flex-direction: column;
-  gap: $kui-space-30;
-  margin-bottom: $kui-space-60;
-
-  &:last-child { margin-bottom: $kui-space-0; }
+  gap: $kui-space-20;
 }
 
-.field-help {
+.section-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-50;
+  font-weight: $kui-font-weight-bold;
+  line-height: $kui-line-height-50;
+  margin: $kui-space-0;
+}
+
+.section-help {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-30;
   line-height: $kui-line-height-40;
   margin: $kui-space-0;
 }
 
-.cloud-radio-group {
+.form-group {
   display: flex;
+  flex-direction: column;
   gap: $kui-space-40;
 }
 
-.cloud-radio-card {
+.field-help {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  margin: $kui-space-0;
+}
+
+.two-col {
+  display: grid;
+  gap: $kui-space-60;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.select-item {
   align-items: center;
-  background-color: $kui-color-background;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-30;
+  display: flex;
+  gap: $kui-space-30;
+}
+
+.cidr-help-toggle {
+  align-items: center;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: $kui-color-text-primary;
   cursor: pointer;
   display: flex;
-  gap: $kui-space-30;
-  padding: $kui-space-50 $kui-space-60;
-  transition: border-color 0.15s ease-in, box-shadow 0.15s ease-in;
-
-  &.selected {
-    border-color: $kui-color-border-primary;
-    box-shadow: 0 0 0 2px $kui-color-border-primary-weak;
-  }
-
-  .cloud-radio-input { margin: $kui-space-0; }
-  .cloud-radio-label { font-weight: $kui-font-weight-medium; }
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  padding: $kui-space-0;
 }
 
-.region-row {
-  align-items: flex-start;
-  display: flex;
-  gap: $kui-space-40;
-  margin-bottom: $kui-space-40;
-
-  .region-select { flex: 1; }
-  .cidr-input { flex: 1; }
-}
-
-.queued-connection-card {
+.cidr-help {
   background-color: $kui-color-background-neutral-weakest;
+  border-radius: $kui-border-radius-30;
+  color: $kui-color-text-neutral;
+  display: flex;
+  flex-direction: column;
+  font-size: $kui-font-size-30;
+  gap: $kui-space-30;
+  line-height: $kui-line-height-40;
+  padding: $kui-space-60;
+
+  p { margin: $kui-space-0; }
+
+  .cidr-help-title { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
+  .cidr-help-subtitle { color: $kui-color-text; font-weight: $kui-font-weight-semibold; margin-top: $kui-space-20; }
+
+  ul { display: flex; flex-direction: column; gap: $kui-space-20; margin: $kui-space-0; padding-left: $kui-space-70; }
+}
+
+.zone-box {
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-30;
   display: flex;
-  flex-direction: column;
-  gap: $kui-space-40;
-  margin-bottom: $kui-space-50;
-  padding: $kui-space-60;
-
-  .queued-connection-header {
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-
-    .queued-connection-title {
-      font-size: $kui-font-size-40;
-      font-weight: $kui-font-weight-semibold;
-    }
-  }
+  flex-wrap: wrap;
+  gap: $kui-space-50 $kui-space-90;
+  padding: $kui-space-50 $kui-space-60;
 }
 
-.review-section {
+.zone-error {
+  color: $kui-color-text-danger;
+  font-size: $kui-font-size-20;
+  margin: $kui-space-0;
+}
+
+.create-footer {
   display: flex;
-  flex-direction: column;
-  gap: $kui-space-30;
-  margin-bottom: $kui-space-60;
-  padding-bottom: $kui-space-60;
+  gap: $kui-space-40;
+  justify-content: flex-end;
+}
 
-  &:not(:last-of-type) {
-    border-bottom: $kui-border-width-10 solid $kui-color-border;
-  }
+.btn-spinner {
+  animation: btn-spin 0.7s linear infinite;
+}
 
-  .review-section-title {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
-    font-weight: $kui-font-weight-semibold;
-    margin: $kui-space-0 $kui-space-0 $kui-space-20;
-    text-transform: uppercase;
-  }
-
-  .review-row {
-    align-items: center;
-    display: flex;
-    font-size: $kui-font-size-30;
-    gap: $kui-space-60;
-
-    .review-label {
-      color: $kui-color-text-neutral;
-      min-width: 120px;
-    }
-
-    code {
-      background-color: $kui-color-background-neutral-weakest;
-      border-radius: $kui-border-radius-20;
-      font-family: $kui-font-family-code;
-      font-size: $kui-font-size-20;
-      padding: $kui-space-10 $kui-space-20;
-    }
-  }
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
 }
 </style>
