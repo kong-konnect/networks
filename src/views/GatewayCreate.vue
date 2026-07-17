@@ -81,7 +81,7 @@
         <ExplainerPanel
           title="Data plane type"
           :paragraphs="dataPlaneTypeCopy"
-          highlight="data"
+          highlight="data-plane"
         />
 
         <section class="form-section">
@@ -166,7 +166,7 @@
         <ExplainerPanel
           title="Data plane nodes"
           :paragraphs="dataPlaneNodesCopy"
-          highlight="data"
+          highlight="data-plane-node"
         />
 
         <div class="config-layout">
@@ -581,7 +581,7 @@
         <section class="form-section">
           <div class="section-heading">
             <h2 class="section-title">Review and create</h2>
-            <p class="section-help">Review your control plane and data plane node configuration.</p>
+            <p class="section-help">Review your data plane node configuration.</p>
           </div>
 
           <div class="sub-card">
@@ -605,7 +605,6 @@
                     <th>Network</th>
                     <th>CIDR</th>
                     <th>Zones</th>
-                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -619,11 +618,6 @@
                     <td>{{ deploymentNetwork(deployment).name || '—' }}</td>
                     <td>{{ deploymentNetwork(deployment).cidr || '—' }}</td>
                     <td>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</td>
-                    <td>
-                      <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
-                        {{ networkStatusText(deploymentNetwork(deployment).status) }}
-                      </KBadge>
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1150,12 +1144,10 @@ const previewLanguage = computed(() =>
   codeLang.value === 'terraform' ? 'hcl' : 'json')
 
 // ── Review (ConfigCardDisplay) ────────────────────────────────────────────────────
+// Review summary = data plane node configuration only (control-plane details removed).
 const reviewCollections = computed(() => [
   {
     items: [
-      { key: 'control-plane', label: 'Control plane', value: controlPlaneName.value, type: 'plain' as const },
-      { key: 'dp-type', label: 'Data plane type', value: dpTypeLabel.value, type: 'plain' as const },
-      { key: 'providers', label: 'Cloud providers', value: cloudProvidersLabel.value, type: 'plain' as const },
       { key: 'version', label: 'Gateway version', value: gatewayVersionLabel.value, type: 'plain' as const },
       { key: 'api-access', label: 'API access', value: apiAccessLabel.value, type: 'plain' as const },
     ],

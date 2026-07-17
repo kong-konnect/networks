@@ -38,7 +38,7 @@
       <div class="topo-connector" />
       <div
         class="topo-row"
-        :class="{ active: highlight === 'data' }"
+        :class="{ active: highlight === 'data-plane' }"
       >
         <span class="topo-row-label">Data plane</span>
         <div class="topo-nodes">
@@ -46,7 +46,7 @@
             v-for="n in 3"
             :key="n"
             class="topo-box"
-            :class="{ active: highlight === 'data' && n === 1 }"
+            :class="{ active: highlight === 'data-plane-node' && n === 1 }"
           >
             <RuntimesIcon
               class="topo-icon"
@@ -68,7 +68,7 @@ import { RuntimesIcon } from '@kong/icons'
 defineProps<{
   title: string
   paragraphs: string[]
-  highlight: 'control' | 'data'
+  highlight: 'control' | 'data-plane' | 'data-plane-node'
 }>()
 </script>
 
