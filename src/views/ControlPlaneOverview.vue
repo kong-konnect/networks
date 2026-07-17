@@ -93,7 +93,7 @@
 
       <!-- 1b. Configuration captured during creation -->
       <section
-        v-if="gatewayConfig"
+        v-if="dataPlaneConfigured"
         class="detail-section"
         data-testid="cp-configuration"
       >
@@ -146,8 +146,37 @@
         </div>
       </section>
 
-      <!-- 2. Data plane status panel -->
-      <KCard>
+      <!-- 2a. Configure data plane — shown when the CP has no data plane yet -->
+      <KCard v-if="!dataPlaneConfigured">
+        <div class="dp-status" data-testid="configure-data-plane">
+          <CloudIcon
+            class="dp-status-icon"
+            :color="KUI_COLOR_TEXT_NEUTRAL"
+            :size="KUI_ICON_SIZE_70"
+          />
+          <h3 class="dp-status-title">Configure your first cloud gateway data plane</h3>
+          <p class="dp-status-text">
+            Dedicated Cloud gateway data planes are fully managed by Kong. They handle API traffic, enforce policies, and scale automatically.
+          </p>
+          <div class="dp-status-actions">
+            <KButton
+              appearance="primary"
+              data-testid="configure-data-plane-button"
+              @click="configureDataPlane"
+            >
+              <CloudIcon decorative />
+              Configure data plane
+            </KButton>
+            <KButton appearance="tertiary">
+              <BookIcon decorative />
+              Learn more
+            </KButton>
+          </div>
+        </div>
+      </KCard>
+
+      <!-- 2b. Data plane status panel — shown once a data plane is configured -->
+      <KCard v-else>
         <div class="dp-status">
           <CloudIcon
             class="dp-status-icon"
@@ -266,6 +295,14 @@ const store = useNetworksStore()
 
 // Configuration captured during creation (null on a cold/direct visit).
 const gatewayConfig = store.getGatewayConfig()
+
+// A control plane can exist with no data plane yet (created earlier, or the user exited
+// the create flow after step 1). Drive the "configure data plane" empty state off this.
+const dataPlaneConfigured = (gatewayConfig?.deployments?.length ?? 0) > 0
+
+const configureDataPlane = () => {
+  router.push({ name: 'gateway-create', query: { flow: 'data-plane' } })
+}
 
 const PROVIDER_LABELS: Record<string, string> = { aws: 'AWS', gcp: 'GCP', azure: 'Azure' }
 const providerLabel = (p: string) => PROVIDER_LABELS[p] ?? p.toUpperCase()

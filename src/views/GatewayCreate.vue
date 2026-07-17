@@ -1,7 +1,7 @@
 <template>
   <PageLayout
     :breadcrumbs="breadcrumbs"
-    title="Create control plane"
+    :title="pageTitle"
   >
     <div
       class="gateway-create"
@@ -9,7 +9,7 @@
     >
       <WizardStepper
         :labels="stepLabels"
-        :current="step"
+        :current="stepperCurrent"
       />
 
       <!-- ── STEP 0 — Control plane ─────────────────────────────────────── -->
@@ -65,9 +65,9 @@
             appearance="primary"
             :disabled="!controlPlaneName"
             data-testid="wizard-continue-button"
-            @click="step = 1"
+            @click="createControlPlane"
           >
-            Continue
+            Create control plane
           </KButton>
         </footer>
       </div>
@@ -133,7 +133,7 @@
           <KButton
             appearance="tertiary"
             data-testid="wizard-back-button"
-            @click="step = 0"
+            @click="goBackFromType"
           >
             Back
           </KButton>
@@ -141,9 +141,9 @@
             <KButton
               appearance="tertiary"
               data-testid="wizard-cancel-button"
-              @click="handleCancel"
+              @click="exitToOverview"
             >
-              Cancel
+              Exit
             </KButton>
             <KButton
               appearance="primary"
@@ -556,7 +556,7 @@
             <KButton
               appearance="tertiary"
               data-testid="wizard-cancel-button"
-              @click="handleCancel"
+              @click="exitToOverview"
             >
               Exit
             </KButton>
@@ -566,7 +566,7 @@
               data-testid="wizard-review-button"
               @click="step = 3"
             >
-              Save and next
+              Create data plane nodes
             </KButton>
           </div>
         </footer>
@@ -580,8 +580,8 @@
       >
         <section class="form-section">
           <div class="section-heading">
-            <h2 class="section-title">Review and create</h2>
-            <p class="section-help">Review your data plane node configuration.</p>
+            <h2 class="section-title">Review</h2>
+            <p class="section-help">Here's everything you created and the configuration that was applied.</p>
           </div>
 
           <div class="sub-card">
@@ -661,7 +661,7 @@
             <KButton
               appearance="tertiary"
               data-testid="wizard-cancel-button"
-              @click="handleCancel"
+              @click="exitToOverview"
             >
               Exit
             </KButton>
@@ -670,7 +670,7 @@
               data-testid="runtimes-save-button"
               @click="finish({ name: 'gateway-overview' })"
             >
-              Create gateway
+              Done
             </KButton>
           </div>
         </footer>
@@ -708,7 +708,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import type { Component } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30, KUI_ICON_SIZE_40 } from '@kong/design-tokens'
 import {
   AddIcon,
@@ -753,12 +753,23 @@ import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, Network, NetworkStatus } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
 const store = useNetworksStore()
+
+// "data-plane" mode = the control plane already exists (created earlier); the user is
+// picking up data plane creation later, so the wizard starts at the Data plane type step
+// and the Control plane step is dropped from the stepper.
+const dpOnly = route.query.flow === 'data-plane'
+const existingConfig = store.getGatewayConfig()
 
 const breadcrumbs = [
   { key: 'apigw', text: 'API Gateway' },
   { key: 'cps', text: 'Control planes' },
 ]
+
+// Title reflects what's being created: the control plane (full flow) or just the data
+// plane (resumed later for an existing control plane).
+const pageTitle = dpOnly ? 'New data plane' : 'Create control plane'
 
 // ── Copy ──────────────────────────────────────────────────────────────────────
 const controlPlaneCopy = [
@@ -773,10 +784,10 @@ const dataPlaneNodesCopy = [
 ]
 
 // ── Wizard step state ──────────────────────────────────────────────────────────
-const step = ref(0)
+const step = ref(dpOnly ? 1 : 0)
 
 // ── Step 0 — control plane ─────────────────────────────────────────────────────
-const controlPlaneName = ref('Production-API-Gateway')
+const controlPlaneName = ref(existingConfig?.name || 'Production-API-Gateway')
 const controlPlaneDescription = ref('')
 
 // ── Step 1 — data plane type ─────────────────────────────────────────────────────
@@ -823,11 +834,15 @@ const removeEnvVar = (index: number) => {
 }
 
 // ── Dynamic step labels ──────────────────────────────────────────────────────────
-const stepLabels = computed(() =>
-  dpType.value === 'dedicated'
+const stepLabels = computed(() => {
+  const full = dpType.value === 'dedicated'
     ? ['Control plane', 'Data plane type', 'Data plane nodes', 'Review']
-    : ['Control plane', 'Data plane type'],
-)
+    : ['Control plane', 'Data plane type']
+  // In data-plane mode the control plane already exists — drop it from the stepper.
+  return dpOnly ? full.slice(1) : full
+})
+// `step` stays 0-indexed against the full flow; shift it when the CP step is hidden.
+const stepperCurrent = computed(() => (dpOnly ? step.value - 1 : step.value))
 
 // ── Region metadata ─────────────────────────────────────────────────────────
 const REGION_LABELS: Record<string, string> = {
@@ -1157,6 +1172,34 @@ const reviewCollections = computed(() => [
 // ── Navigation ──────────────────────────────────────────────────────────────
 const handleCancel = () => {
   router.push({ name: 'networks-list' })
+}
+
+// Control plane is created at step 1 (matches production: the CP exists before any data
+// plane is configured). Persist a CP-only config so its overview can offer "Configure
+// data plane" if the user stops here.
+const createControlPlane = () => {
+  store.setGatewayConfig({
+    name: controlPlaneName.value,
+    dataPlaneType: '',
+    gatewayVersion: '',
+    apiAccess: '',
+    envVars: [],
+    deployments: [],
+  })
+  step.value = 1
+}
+
+// After the CP exists, leaving the flow lands on the control-plane overview (not the
+// networks list) — the data plane can be added there anytime.
+const exitToOverview = () => {
+  router.push({ name: 'gateway-overview' })
+}
+
+// Back from the first data-plane step: to the CP step normally, to the CP overview when
+// the CP already existed (data-plane mode).
+const goBackFromType = () => {
+  if (dpOnly) exitToOverview()
+  else step.value = 0
 }
 
 // Deployment is the final step — "View your data plane node" and "Set up later" both
