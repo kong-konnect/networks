@@ -402,10 +402,10 @@
           </section>
         </div>
 
-        <!-- Section 3 — Used by -->
-        <section class="detail-card" data-testid="used-by">
+        <!-- Section 3 — Attached gateways -->
+        <section class="detail-card" data-testid="attached-gateways">
           <div class="section-header-text">
-            <h3 class="numbered-title">Used by</h3>
+            <h3 class="numbered-title">Attached gateways</h3>
             <p class="section-help">Gateways currently using this network.</p>
           </div>
           <table v-if="usedByRows.length" class="rows-table">
@@ -818,7 +818,7 @@ const zonesLabel = computed(() => {
   return zones.length ? zones.join(', ') : '—'
 })
 
-// "Used by" — the gateways (any family) currently using this network. Control-plane
+// "Attached gateways" — the gateways (any family) currently using this network. Control-plane
 // and data-plane-group ids are derived deterministically from the gateway id (mock).
 const usedByRows = computed(() =>
   gateways.value.map(gw => ({
