@@ -425,6 +425,20 @@
 
       </div>
 
+      <!-- ── Communication tab ────────────────────────────────── -->
+      <div v-if="activeTab === '#communication'" class="tab-content">
+        <div class="section-header-text">
+          <h2 class="section-title">System map</h2>
+          <p class="section-help">How this network is used by gateways, DNS, and connectivity resources. Opens on what needs attention.</p>
+        </div>
+        <NetworkCommunicationMap
+          :network="network"
+          :connections="connections"
+          :gateways="gateways"
+          :dns-configs="dnsList"
+        />
+      </div>
+
       <!-- ── Connectivity tab ─────────────────────────────────── -->
       <div v-if="activeTab === '#connectivity'" class="tab-content">
         <div class="section-header">
@@ -680,6 +694,7 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
+import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
 import {
@@ -821,6 +836,7 @@ const breadcrumbs = [
 
 const tabs = [
   { hash: '#overview', title: 'Overview' },
+  { hash: '#communication', title: 'Communication' },
   { hash: '#connectivity', title: 'Connectivity' },
   { hash: '#dns', title: 'Private DNS' },
 ]
