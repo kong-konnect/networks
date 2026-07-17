@@ -584,82 +584,90 @@
             <p class="section-help">Here's everything you created and the configuration that was applied.</p>
           </div>
 
-          <div class="sub-card">
-            <ConfigCardDisplay
-              :property-collections="reviewCollections"
-              data-testid="review-summary"
-            />
-          </div>
+          <div class="review-layout">
+            <!-- Main: configuration as code -->
+            <section class="review-config">
+              <div class="review-config-head">
+                <div class="numbered-heading">
+                  <h3 class="numbered-title">Data plane configuration</h3>
+                  <p class="section-help">The configuration that will be applied when you create the gateway.</p>
+                </div>
+                <div class="config-lang">
+                  <KSegmentedControl
+                    v-model="codeLang"
+                    :options="codeLangOptions"
+                    data-testid="config-lang-toggle"
+                  />
+                </div>
+              </div>
+              <KCodeBlock
+                id="gateway-config-preview"
+                class="config-code-block"
+                :code="previewCode"
+                :language="previewLanguage"
+                theme="dark"
+                data-testid="config-code-block"
+              />
+            </section>
 
-          <div class="review-section">
-            <h3 class="numbered-title">Data plane nodes</h3>
-            <div class="sub-card">
-              <table
-                class="rows-table"
-                data-testid="review-deployments-table"
-              >
-                <thead>
-                  <tr>
-                    <th>Provider</th>
-                    <th>Region</th>
-                    <th>Network</th>
-                    <th>CIDR</th>
-                    <th>Zones</th>
-                    <th>Network status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(deployment, di) in deployments"
-                    :key="di"
-                    :data-testid="`review-deployment-row-${di}`"
-                  >
-                    <td>
+            <!-- Rail: summary of what was created -->
+            <aside class="review-summary-rail" data-testid="review-summary">
+              <h3 class="numbered-title">Summary</h3>
+              <dl class="summary-list">
+                <div class="summary-item">
+                  <dt>Gateway version</dt>
+                  <dd>{{ gatewayVersionLabel }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>API access</dt>
+                  <dd>{{ apiAccessLabel }}</dd>
+                </div>
+                <template
+                  v-for="(deployment, di) in deployments"
+                  :key="di"
+                >
+                  <div class="summary-divider" />
+                  <div class="summary-item">
+                    <dt>Provider</dt>
+                    <dd>
                       <span class="cell-icon">
                         <component :is="providerIcon(deployment.provider)" :size="KUI_ICON_SIZE_20" decorative />
                         {{ providerLabel(deployment.provider) }}
                       </span>
-                    </td>
-                    <td>
+                    </dd>
+                  </div>
+                  <div class="summary-item">
+                    <dt>Region</dt>
+                    <dd>
                       <span class="cell-icon">
                         <component :is="regionFlag(deployment.region)" :size="KUI_ICON_SIZE_20" decorative />
                         {{ regionLabel(deployment.region) }}
                       </span>
-                    </td>
-                    <td>{{ deploymentNetwork(deployment).name || '—' }}</td>
-                    <td>{{ deploymentNetwork(deployment).cidr || '—' }}</td>
-                    <td>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</td>
-                    <td>
+                    </dd>
+                  </div>
+                  <div class="summary-item">
+                    <dt>Network</dt>
+                    <dd>{{ deploymentNetwork(deployment).name || '—' }}</dd>
+                  </div>
+                  <div class="summary-item">
+                    <dt>CIDR</dt>
+                    <dd>{{ deploymentNetwork(deployment).cidr || '—' }}</dd>
+                  </div>
+                  <div class="summary-item">
+                    <dt>Zones</dt>
+                    <dd>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</dd>
+                  </div>
+                  <div class="summary-item">
+                    <dt>Network status</dt>
+                    <dd>
                       <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
                         {{ networkStatusText(deploymentNetwork(deployment).status) }}
                       </KBadge>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="review-section">
-            <div class="config-preview-header">
-              <div class="numbered-heading">
-                <h3 class="numbered-title">Data plane configuration</h3>
-                <p class="section-help">The configuration that will be applied when you create the gateway.</p>
-              </div>
-              <KSegmentedControl
-                v-model="codeLang"
-                :options="codeLangOptions"
-                data-testid="config-lang-toggle"
-              />
-            </div>
-            <KCodeBlock
-              id="gateway-config-preview"
-              class="config-code-block"
-              :code="previewCode"
-              :language="previewLanguage"
-              theme="dark"
-              data-testid="config-code-block"
-            />
+                    </dd>
+                  </div>
+                </template>
+              </dl>
+            </aside>
           </div>
         </section>
 
@@ -1728,6 +1736,82 @@ const finish = (destination: { name: string }) => {
 .config-code-block {
   max-height: 30rem;
   overflow: auto;
+}
+
+// ── Review: side-by-side config + summary rail (metering-inspired) ───────────────
+.review-layout {
+  align-items: start;
+  display: grid;
+  gap: $kui-space-80;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+
+  @media (max-width: 1080px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.review-config {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-60;
+  min-width: 0;
+}
+
+.review-config-head {
+  align-items: flex-start;
+  display: flex;
+  gap: $kui-space-60;
+  justify-content: space-between;
+}
+
+// Keep the format toggle at its natural width (never stretched full-bleed).
+.config-lang {
+  flex: 0 0 auto;
+}
+
+.review-summary-rail {
+  background-color: $kui-color-background-neutral-weakest;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-60;
+  padding: $kui-space-70;
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-50;
+  margin: $kui-space-0;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-20;
+
+  dt {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-20;
+    font-weight: $kui-font-weight-semibold;
+  }
+
+  dd {
+    color: $kui-color-text;
+    font-size: $kui-font-size-40;
+    margin: $kui-space-0;
+  }
+}
+
+.summary-divider {
+  border-top: $kui-border-width-10 solid $kui-color-border;
+}
+
+.summary-item .cell-icon {
+  align-items: center;
+  display: inline-flex;
+  gap: $kui-space-30;
 }
 
 // ── Review deployments ──────────────────────────────────────────────────────────

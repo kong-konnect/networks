@@ -52,12 +52,12 @@
             </KBadge>
             <KTooltip
               v-if="row.attachedGatewayCount === 0"
-              text="This network is not used by any gateways. Delete this network to reduce your cost."
+              text="This network is not used by any gateways. Delete it to reduce your cost."
             >
-              <WarningIcon
-                class="warn-icon"
-                :size="KUI_ICON_SIZE_30"
-              />
+              <KBadge appearance="warning" data-testid="unused-badge">
+                <WarningIcon :size="KUI_ICON_SIZE_20" decorative />
+                Unused
+              </KBadge>
             </KTooltip>
           </div>
         </template>

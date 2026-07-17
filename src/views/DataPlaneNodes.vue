@@ -26,13 +26,17 @@
         table-preferences-key="data-plane-nodes"
       >
         <template #provider="{ row }">
-          <KBadge :appearance="cloudBadgeAppearance(row.cloud)">
-            {{ row.cloud.toUpperCase() }}
-          </KBadge>
+          <span class="cell-icon">
+            <component :is="providerIcon(row.cloud)" :size="KUI_ICON_SIZE_20" decorative />
+            {{ providerLabel(row.cloud) }}
+          </span>
         </template>
 
         <template #region="{ row }">
-          <span class="region-text">{{ row.region }}</span>
+          <span class="cell-icon">
+            <component :is="regionFlag(row.region)" :size="KUI_ICON_SIZE_20" decorative />
+            {{ regionLabel(row.region) }}
+          </span>
         </template>
 
         <template #dataPlaneGroup="{ row }">
@@ -78,9 +82,11 @@
 
 <script setup lang="ts">
 import { KBadge, KEmptyState } from '@kong/kongponents'
+import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { providerIcon, providerLabel, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { Network } from '@/types'
 
 const store = useNetworksStore()
@@ -109,7 +115,7 @@ const headers = [
   { label: 'Data plane group', key: 'dataPlaneGroup', sortable: false },
   { label: 'Network', key: 'network', sortable: false },
   { label: 'Connectivity', key: 'connectivity', sortable: false },
-  { label: 'Data planes / status', key: 'status', sortable: false },
+  { label: 'Status', key: 'status', sortable: false },
 ]
 
 const cloudBadgeAppearance = (cloud: string): string => {
@@ -144,7 +150,7 @@ const connectivitySummary = (network: Network): ConnectivitySummary => {
     c => c.status === 'pending-user-action' || c.status === 'pending-acceptance',
   ).length
   if (pendingCount > 0) {
-    return { label: `${pendingCount} pending`, appearance: 'warning' }
+    return { label: 'Pending customer action', appearance: 'warning' }
   }
 
   if (connections.length === 0) {
@@ -246,8 +252,11 @@ const fetcher = async () => {
   }
 }
 
-.region-text {
-  font-size: $kui-font-size-30;
+.cell-icon {
+  align-items: center;
+  display: inline-flex;
+  gap: $kui-space-30;
+  white-space: nowrap;
 }
 
 .mono-text {

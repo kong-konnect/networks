@@ -713,10 +713,8 @@ const nextSteps = computed<NextStep[]>(() => {
   if (dnsList.value.length === 0) {
     steps.push({ key: 'dns', title: 'Set up private DNS', desc: 'Resolve private service names through this network.', icon: WorldPrivateIcon, tone: 'teal', handler: openAddDns })
   }
-  // Only meaningful to test once there's connectivity or DNS to exercise.
-  if (connections.value.length > 0 || dnsList.value.length > 0) {
-    steps.push({ key: 'test', title: 'Test endpoint', desc: 'Check that traffic actually flows through the network.', icon: PlugIcon, tone: 'pink', handler: () => router.push({ name: 'networks-test-endpoint', params: { id: networkId.value } }) })
-  }
+  // Testing the endpoint is an optional verification, not a required setup step, so it
+  // lives as a header action — not in Next steps.
   return steps
 })
 
