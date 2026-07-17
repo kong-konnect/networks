@@ -116,7 +116,15 @@
             </div>
             <div class="about-item">
               <span class="about-label">Private connectivity</span>
-              <KBadge :appearance="privateNetworking.appearance">{{ privateNetworking.label }}</KBadge>
+              <KBadge appearance="neutral">Not available</KBadge>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Private DNS</span>
+              <KBadge appearance="neutral">Not available</KBadge>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Last checked</span>
+              <span class="about-value">{{ timeAgo(network.lastCheckedAt) }}</span>
             </div>
           </div>
         </section>
@@ -132,20 +140,22 @@
               v-for="s in provisioningSteps"
               :key="s.key"
               class="prov-check-row"
-              :class="`prov-check-row--${s.state}`"
+              :class="[`prov-check-row--${s.state}`, { 'prov-check-row--awaiting': s.state === 'current' && s.owner === 'user' }]"
             >
               <span class="prov-check-icon">
                 <CheckCircleIcon v-if="s.state === 'done'" :size="KUI_ICON_SIZE_30" decorative />
+                <NotificationOutlineIcon v-else-if="s.state === 'current' && s.owner === 'user'" :size="KUI_ICON_SIZE_30" decorative />
                 <ProgressIcon v-else-if="s.state === 'current'" class="prov-spin" :size="KUI_ICON_SIZE_30" decorative />
                 <ClockIcon v-else :size="KUI_ICON_SIZE_30" decorative />
               </span>
               <span class="prov-check-text">
-                <span class="prov-check-title">{{ s.title }}</span>
+                <span class="prov-check-titles">
+                  <span class="prov-check-title">{{ s.title }}</span>
+                  <KBadge :appearance="s.owner === 'user' ? 'warning' : 'neutral'">{{ s.owner === 'user' ? 'You' : 'Kong' }}</KBadge>
+                </span>
                 <span class="prov-check-desc">{{ s.desc }}</span>
               </span>
-              <span class="prov-check-status">
-                {{ s.state === 'done' ? 'Done' : s.state === 'current' ? 'In progress' : 'Pending' }}
-              </span>
+              <span class="prov-check-status">{{ provStatusLabel(s) }}</span>
             </li>
           </ul>
         </section>
@@ -253,6 +263,14 @@
             <div class="about-item">
               <span class="about-label">Private connectivity</span>
               <KBadge :appearance="privateNetworking.appearance">{{ privateNetworking.label }}</KBadge>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Private DNS</span>
+              <KBadge :appearance="privateDnsStatus.appearance">{{ privateDnsStatus.label }}</KBadge>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Last checked</span>
+              <span class="about-value">{{ timeAgo(network.lastCheckedAt) }}</span>
             </div>
           </div>
         </section>
@@ -690,6 +708,7 @@ import {
   RuntimesIcon,
   CheckCircleIcon,
   ClockIcon,
+  NotificationOutlineIcon,
   ProgressIcon,
   AwsIcon,
   GoogleCloudIcon,
@@ -782,6 +801,12 @@ const formatDate = (iso: string) => new Date(iso).toLocaleString('en-US', {
 const privateNetworking = computed(() => {
   const configured = connections.value.some(c => c.family === 'peering')
   return configured
+    ? { label: 'Configured', appearance: 'success' as const }
+    : { label: 'Not configured', appearance: 'neutral' as const }
+})
+
+const privateDnsStatus = computed(() => {
+  return dnsList.value.length
     ? { label: 'Configured', appearance: 'success' as const }
     : { label: 'Not configured', appearance: 'neutral' as const }
 })
@@ -889,14 +914,22 @@ const connectivityViewOptions = [
 ]
 
 
-// System-driven provisioning checklist for the initializing state (no user action).
+// Provisioning checklist for the initializing state. Each step is owned by either
+// Kong (system-driven) or you (an action on the customer's cloud account), so it's
+// clear where the network is waiting.
 type ProvState = 'done' | 'current' | 'pending'
-const provisioningSteps: { key: string; title: string; desc: string; state: ProvState }[] = [
-  { key: 'created', title: 'Network record created', desc: 'Konnect created the network object and saved the selected CIDR, provider, region, and zones.', state: 'done' },
-  { key: 'provider', title: 'Setting up provider network', desc: 'Kong is provisioning the provider-side network resources.', state: 'current' },
-  { key: 'zones', title: 'Preparing zone placement', desc: 'Data plane placement is prepared across the selected zones.', state: 'pending' },
-  { key: 'ready', title: 'Network ready', desc: 'Private connectivity and Private DNS become available after this step.', state: 'pending' },
+type ProvOwner = 'kong' | 'user'
+const provisioningSteps: { key: string; title: string; desc: string; owner: ProvOwner; state: ProvState }[] = [
+  { key: 'created', owner: 'kong', title: 'Network record created', desc: 'Konnect created the network object with your CIDR, provider, region, and zones.', state: 'done' },
+  { key: 'approve', owner: 'user', title: 'Approve the network in your cloud account', desc: 'Accept the network share in your cloud provider account so Kong can attach the provider network.', state: 'current' },
+  { key: 'provider', owner: 'kong', title: 'Provisioning provider network', desc: 'Kong provisions the provider-side network resources across the selected zones.', state: 'pending' },
+  { key: 'ready', owner: 'kong', title: 'Network ready', desc: 'Private connectivity and Private DNS become available after this step.', state: 'pending' },
 ]
+function provStatusLabel(s: { owner: ProvOwner; state: ProvState }): string {
+  if (s.state === 'done') return 'Done'
+  if (s.state === 'pending') return 'Pending'
+  return s.owner === 'user' ? 'Awaiting your action' : 'In progress'
+}
 
 const dnsList = computed(() => network.value?.dnsConfigs ?? [])
 
@@ -1069,6 +1102,7 @@ const confirmDelete = () => {
 
   .prov-check-row--done & { color: $kui-color-text-success; }
   .prov-check-row--current & { color: $kui-color-text-primary; }
+  .prov-check-row--awaiting & { color: $kui-color-text-warning; }
 }
 
 .prov-spin {
@@ -1085,6 +1119,13 @@ const confirmDelete = () => {
   flex: 1 1 auto;
   flex-direction: column;
   gap: $kui-space-20;
+}
+
+.prov-check-titles {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-40;
 }
 
 .prov-check-title {
@@ -1106,9 +1147,11 @@ const confirmDelete = () => {
   flex: 0 0 auto;
   font-size: $kui-font-size-30;
   padding-top: $kui-space-10;
+  white-space: nowrap;
 
   .prov-check-row--done & { color: $kui-color-text-success; }
   .prov-check-row--current & { color: $kui-color-text-primary; font-weight: $kui-font-weight-semibold; }
+  .prov-check-row--awaiting & { color: $kui-color-text-warning; font-weight: $kui-font-weight-semibold; }
 }
 
 .section-header {
