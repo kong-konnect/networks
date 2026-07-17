@@ -275,37 +275,6 @@
           </div>
         </section>
 
-        <!-- Section 2 — Stats strip (Mesh "Global control plane stats" pattern) -->
-        <section class="detail-card stats-strip" data-testid="network-stats">
-          <div class="stat">
-            <span class="stat-head">
-              <RuntimesIcon :size="KUI_ICON_SIZE_20" decorative />
-              Attached gateways
-            </span>
-            <span class="stat-value">{{ network.attachedGatewayCount }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-head">
-              <ConnectionsIcon :size="KUI_ICON_SIZE_20" decorative />
-              Private connections
-            </span>
-            <span class="stat-value">{{ connections.length }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-head">
-              <WorldPrivateIcon :size="KUI_ICON_SIZE_20" decorative />
-              Private DNS
-            </span>
-            <span class="stat-value">{{ dnsList.length }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-head">
-              <LocationIcon :size="KUI_ICON_SIZE_20" decorative />
-              Zones
-            </span>
-            <span class="stat-value">{{ network.regions[0].zones?.length ?? 0 }}</span>
-          </div>
-        </section>
 
         <!-- Section 3 — Private connectivity + Private DNS (50/50) -->
         <div class="overview-cols">
@@ -721,7 +690,6 @@ import {
   ConnectionsIcon,
   WorldPrivateIcon,
   ListIcon,
-  RuntimesIcon,
   CheckCircleIcon,
   ClockIcon,
   NotificationOutlineIcon,
@@ -1290,51 +1258,6 @@ const confirmDelete = () => {
   display: flex;
   flex-direction: column;
   gap: $kui-space-30;
-}
-
-// Stats strip — Mesh "Global control plane stats" pattern (one card, divided tiles).
-.stats-strip {
-  flex-direction: row;
-  gap: $kui-space-0;
-  padding: $kui-space-0;
-
-  .stat {
-    display: flex;
-    flex: 1 1 0;
-    flex-direction: column;
-    gap: $kui-space-30;
-    padding: $kui-space-70;
-
-    &:not(:first-child) {
-      border-left: $kui-border-width-10 solid $kui-color-border;
-    }
-  }
-
-  .stat-head {
-    align-items: center;
-    color: $kui-color-text-neutral;
-    display: flex;
-    font-size: $kui-font-size-30;
-    gap: $kui-space-30;
-  }
-
-  .stat-value {
-    color: $kui-color-text;
-    font-size: $kui-font-size-70;
-    font-weight: $kui-font-weight-bold;
-    line-height: $kui-line-height-30;
-  }
-
-  @media (max-width: 760px) {
-    flex-wrap: wrap;
-
-    .stat {
-      flex-basis: 50%;
-
-      &:nth-child(-n + 2) { border-bottom: $kui-border-width-10 solid $kui-color-border; }
-      &:nth-child(odd) { border-left: none; }
-    }
-  }
 }
 
 // Prominent empty state inside the connectivity / DNS cards (Mesh "Create your first…").
