@@ -542,6 +542,73 @@
             </button>
           </div>
 
+          <div class="stack-connector" />
+          <span class="stack-band-label">Name resolution and gateway access</span>
+
+          <!-- Lower layers: how names resolve, and what can reach the network -->
+          <div class="stack-lower">
+            <div class="detail-card stack-lower-card" data-testid="stack-dns">
+              <div class="stack-lower-head">
+                <h3 class="stack-lower-title">Private DNS</h3>
+                <KBadge v-if="dnsAttention.count" appearance="warning">Needs attention</KBadge>
+                <KBadge v-else-if="dnsList.length" appearance="success">Ready</KBadge>
+              </div>
+              <p class="section-help">Name resolution for services reached through this network.</p>
+              <ul v-if="dnsList.length" class="stack-res-list">
+                <li
+                  v-for="dns in dnsList"
+                  :key="dns.id"
+                  class="stack-res-row"
+                  @click="goToDns(dns.id)"
+                >
+                  <span class="stack-res-main">
+                    <a class="row-link" href="#" @click.prevent.stop="goToDns(dns.id)">{{ dns.name }}</a>
+                    <span class="stack-res-sub">{{ dnsTypeLabel(dns.type) }}<template v-if="dns.lastCheckedAt"> · checked {{ timeAgo(dns.lastCheckedAt) }}</template></span>
+                  </span>
+                  <KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge>
+                </li>
+              </ul>
+              <p v-else class="section-help stack-res-empty">No private DNS configured on this network.</p>
+            </div>
+
+            <div class="detail-card stack-lower-card" data-testid="stack-gateway-access">
+              <div class="stack-lower-head">
+                <h3 class="stack-lower-title">Gateway access</h3>
+              </div>
+              <p class="section-help">What can reach this network, and how to verify it.</p>
+              <ul class="stack-res-list">
+                <li
+                  v-for="gw in usedByRows"
+                  :key="gw.id"
+                  class="stack-res-row"
+                  @click="goToGateway(gw)"
+                >
+                  <span class="stack-res-main">
+                    <a class="row-link" href="#" @click.prevent.stop="goToGateway(gw)">{{ gw.name }}</a>
+                    <span class="stack-res-sub">{{ gw.type }} · {{ gw.dataPlaneGroup }}</span>
+                  </span>
+                  <KBadge appearance="success">Ready</KBadge>
+                </li>
+                <li
+                  class="stack-res-row"
+                  @click="router.push({ name: 'networks-test-endpoint', params: { id: network.id } })"
+                >
+                  <span class="stack-res-main">
+                    <a class="row-link" href="#" @click.prevent.stop="router.push({ name: 'networks-test-endpoint', params: { id: network.id } })">Test endpoint</a>
+                    <span class="stack-res-sub">Validate reachability through this network.</span>
+                  </span>
+                  <KButton
+                    appearance="tertiary"
+                    size="small"
+                    @click.stop="router.push({ name: 'networks-test-endpoint', params: { id: network.id } })"
+                  >
+                    Open
+                  </KButton>
+                </li>
+              </ul>
+            </div>
+          </div>
+
           <!-- Legend — dot semantics + the last-checked caveat -->
           <div class="stack-legend">
             <span class="legend-item"><span class="legend-dot legend-dot--ready" />Ready</span>
@@ -2021,6 +2088,73 @@ const confirmDelete = () => {
   color: $kui-color-text-primary;
   font-size: $kui-font-size-30;
   font-weight: $kui-font-weight-semibold;
+}
+
+.stack-lower {
+  display: grid;
+  gap: $kui-space-50;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.stack-lower-card {
+  gap: $kui-space-40;
+}
+
+.stack-lower-head {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-40;
+}
+
+.stack-lower-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-40;
+  font-weight: $kui-font-weight-semibold;
+  margin: $kui-space-0;
+}
+
+.stack-res-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: $kui-space-0;
+  padding: $kui-space-0;
+}
+
+.stack-res-row {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: $kui-space-50;
+  justify-content: space-between;
+  padding: $kui-space-40 $kui-space-0;
+
+  &:not(:last-child) {
+    border-bottom: $kui-border-width-10 solid $kui-color-border;
+  }
+
+  &:hover .row-link { text-decoration: underline; }
+}
+
+.stack-res-main {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-10;
+  min-width: 0;
+}
+
+.stack-res-sub {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+}
+
+.stack-res-empty {
+  padding: $kui-space-40 $kui-space-0;
 }
 
 .stack-legend {
