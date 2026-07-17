@@ -63,6 +63,13 @@
               <slot name="title-after" />
             </div>
           </div>
+          <p
+            v-if="subtitle"
+            class="page-layout-subtitle"
+            data-testid="page-layout-subtitle"
+          >
+            {{ subtitle }}
+          </p>
         </div>
 
         <div
@@ -102,6 +109,7 @@ export type { PageLayoutTab }
 const props = withDefaults(defineProps<{
   breadcrumbs?: BreadcrumbItem[]
   title?: string
+  subtitle?: string
   backTo?: RouteLocationRaw | string
   tabs?: PageLayoutTab[]
 }>(), {
@@ -198,6 +206,12 @@ const navigateBack = (): void => {
             gap: $kui-space-30;
             padding-left: $kui-space-20;
           }
+        }
+
+        .page-layout-subtitle {
+          color: $kui-color-text-neutral;
+          font-size: $kui-font-size-30;
+          margin: $kui-space-20 $kui-space-0 $kui-space-0;
         }
       }
 

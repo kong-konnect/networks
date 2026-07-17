@@ -2,6 +2,7 @@
   <PageLayout
     v-if="network"
     :title="network.name"
+    :subtitle="networkSubtitle"
     :breadcrumbs="breadcrumbs"
     :back-to="{ name: 'networks-list' }"
   >
@@ -216,6 +217,8 @@
                   <th>Name</th>
                   <th>Type</th>
                   <th>Status</th>
+                  <th>Last checked</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -230,6 +233,8 @@
                   </td>
                   <td>{{ connectionTypeLabel(conn.type) }}</td>
                   <td><KBadge :appearance="statusBadgeAppearance(conn.status)">{{ statusLabel(conn.status) }}</KBadge></td>
+                  <td class="checked-cell">{{ conn.lastCheckedAt ? timeAgo(conn.lastCheckedAt) : '—' }}</td>
+                  <td><a class="row-action" href="#" @click.prevent.stop="goToConnection(conn.id)">View</a></td>
                 </tr>
               </tbody>
             </table>
@@ -250,6 +255,8 @@
                   <th>Domain</th>
                   <th>Type</th>
                   <th>Status</th>
+                  <th>Last checked</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,6 +271,8 @@
                   </td>
                   <td>{{ dnsTypeLabel(dns.type) }}</td>
                   <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
+                  <td class="checked-cell">{{ dns.lastCheckedAt ? timeAgo(dns.lastCheckedAt) : '—' }}</td>
+                  <td><a class="row-action" href="#" @click.prevent.stop="goToDns(dns.id)">View</a></td>
                 </tr>
               </tbody>
             </table>
@@ -363,7 +372,7 @@
             <template #status="{ row }">
               <KBadge :appearance="statusBadgeAppearance(row.status)">{{ statusLabel(row.status) }}</KBadge>
             </template>
-            <template #lastChecked="{ row }">{{ timeAgo(row.lastCheckedAt) }}</template>
+            <template #lastChecked="{ row }">{{ row.lastCheckedAt ? timeAgo(row.lastCheckedAt) : '—' }}</template>
             <template #actions="{ row }">
               <a class="row-action" href="#" @click.prevent="goToConnection(row.id)">View</a>
             </template>
@@ -428,25 +437,27 @@
           <table class="rows-table">
             <thead>
               <tr>
-                <th>Name / domain</th>
+                <th>Domain</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Used for</th>
                 <th>Last checked</th>
-                <th></th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="dns in dnsList" :key="dns.id">
-                <td class="dns-domain">{{ dns.name }}</td>
+              <tr
+                v-for="dns in dnsList"
+                :key="dns.id"
+                class="clickable-row"
+                @click="goToDns(dns.id)"
+              >
+                <td>
+                  <a class="row-link" href="#" @click.prevent.stop="goToDns(dns.id)">{{ dns.name }}</a>
+                </td>
                 <td>{{ dnsTypeLabel(dns.type) }}</td>
                 <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
-                <td>{{ dns.usedFor }}</td>
-                <td>
-                  <span v-if="dns.status !== 'ready' && dns.lastCheckedAt">{{ timeAgo(dns.lastCheckedAt) }}</span>
-                  <span v-else class="dash">—</span>
-                </td>
-                <td><a class="row-action" href="#" @click.prevent="goToDns(dns.id)">View</a></td>
+                <td class="checked-cell">{{ dns.lastCheckedAt ? timeAgo(dns.lastCheckedAt) : '—' }}</td>
+                <td><a class="row-action" href="#" @click.prevent.stop="goToDns(dns.id)">View</a></td>
               </tr>
             </tbody>
           </table>
@@ -650,6 +661,16 @@ const REGION_NAMES: Record<string, string> = {
 // Reference format: "US East (N. Virginia) (us-east-1)".
 const regionName = (code: string) => REGION_NAMES[code] ? `${REGION_NAMES[code]} (${code})` : code
 
+// Header subtitle for quick orientation: "AWS · US East (N. Virginia) · 10.0.0.0/16".
+const PROVIDER_NAMES: Record<string, string> = { aws: 'AWS', gcp: 'GCP', azure: 'Azure' }
+const networkSubtitle = computed(() => {
+  const n = network.value
+  if (!n) return ''
+  const r = n.regions[0]
+  const region = REGION_NAMES[r.region] ?? r.region
+  return `${PROVIDER_NAMES[n.cloud] ?? n.cloud.toUpperCase()} · ${region} · ${r.cidr}`
+})
+
 const formatDate = (iso: string) => new Date(iso).toLocaleString('en-US', {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
 })
@@ -754,7 +775,7 @@ const connectionHeaders = [
   { label: 'Type', key: 'type', sortable: false },
   { label: 'Status', key: 'status', sortable: false },
   { label: 'Last checked', key: 'lastChecked', sortable: false },
-  { label: '', key: 'actions', sortable: false },
+  { label: 'Action', key: 'actions', sortable: false },
 ]
 
 const connectivityView = ref<'table' | 'stack'>('table')
@@ -1026,6 +1047,11 @@ const handleContactSupport = () => {
   &:hover { text-decoration: underline; }
 
   &--danger { color: $kui-color-text-danger; }
+}
+
+.checked-cell {
+  color: $kui-color-text-neutral;
+  white-space: nowrap;
 }
 
 // Entity name link inside a table row (click name or row to navigate — Konnect pattern).
