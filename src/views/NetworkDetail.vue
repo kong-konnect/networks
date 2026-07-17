@@ -6,6 +6,21 @@
     :back-to="{ name: 'networks-list' }"
   >
     <template #actions>
+      <!-- Restore Next steps — standalone icon button (outside the actions dropdown),
+           shown only after the user dismisses the panel. Label via tooltip. -->
+      <KTooltip
+        v-if="network.status === 'ready' && !showNextStep && nextSteps.length"
+        text="Next steps"
+      >
+        <KButton
+          appearance="tertiary"
+          aria-label="Next steps"
+          data-testid="restore-next-step"
+          @click="showNextStep = true"
+        >
+          <ListIcon decorative />
+        </KButton>
+      </KTooltip>
       <KButton
         v-if="network.status === 'ready'"
         appearance="secondary"
@@ -182,7 +197,7 @@
               <KBadge :appearance="networkStatusBadge(network.status)">{{ networkStatusText(network.status) }}</KBadge>
             </div>
             <div class="about-item">
-              <span class="about-label">Private networking</span>
+              <span class="about-label">Private connectivity</span>
               <KBadge :appearance="privateNetworking.appearance">{{ privateNetworking.label }}</KBadge>
             </div>
           </div>
@@ -566,6 +581,7 @@ import {
   ConnectionsIcon,
   WorldPrivateIcon,
   PlugIcon,
+  ListIcon,
   AwsIcon,
   GoogleCloudIcon,
   AzureIcon,
@@ -592,6 +608,7 @@ import {
   KLabel,
   KSelect,
   KSegmentedControl,
+  KTooltip,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
@@ -1420,14 +1437,12 @@ const handleContactSupport = () => {
   gap: $kui-space-20;
 }
 
+// Clean horizontal fact strip (matches the production "About …" card structure).
 .about-grid {
-  display: grid;
-  gap: $kui-space-60 $kui-space-70;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-
-  @media (max-width: 900px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  column-gap: $kui-space-90;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: $kui-space-60;
 }
 
 .about-item {

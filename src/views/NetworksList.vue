@@ -98,15 +98,16 @@
         </template>
 
         <template #privateNetworking="{ row }">
-          <div class="pn-cell">
+          <div v-if="hasPrivateNetworking(row)" class="pn-cell">
             <KBadge
               v-for="label in privateNetworkingLabels(row)"
               :key="label"
-              appearance="neutral"
+              appearance="info"
             >
               {{ label }}
             </KBadge>
           </div>
+          <span v-else class="pn-none">Not configured</span>
         </template>
 
         <template #action-items="{ row }">
@@ -201,7 +202,7 @@ const displayHeaders = [
   { label: 'Region', key: 'regions', sortable: false },
   { label: 'CIDR', key: 'cidr', sortable: false },
   { label: 'Zones', key: 'zones', sortable: false },
-  { label: 'Private networking', key: 'privateNetworking', sortable: false },
+  { label: 'Private connectivity', key: 'privateNetworking', sortable: false },
 ]
 
 const fetcher = async () => {
@@ -240,13 +241,16 @@ const PRIVATE_NETWORKING_LABELS: Record<string, string> = {
   'aws-transit-gateway': 'Transit Gateway',
   'azure-virtual-hub': 'Virtual hub peering',
 }
+const hasPrivateNetworking = (network: Network): boolean =>
+  store.getConnectionsByNetworkId(network.id).length > 0
+
 const privateNetworkingLabels = (network: Network): string[] => {
   const conns = store.getConnectionsByNetworkId(network.id)
   const labels = new Set<string>()
   for (const c of conns) {
     labels.add(PRIVATE_NETWORKING_LABELS[c.type] ?? 'Resource Endpoints')
   }
-  return labels.size ? [...labels] : ['No private network']
+  return [...labels]
 }
 
 const cloudBadgeAppearance = (cloud: string) => {
@@ -323,6 +327,11 @@ const confirmDelete = () => {
   display: inline-flex;
   gap: $kui-space-30;
   white-space: nowrap;
+}
+
+.pn-none {
+  color: $kui-color-text-neutral-weak;
+  font-size: $kui-font-size-30;
 }
 
 .regions-text {
