@@ -19,7 +19,6 @@ const initialNetworks: Network[] = [
     cloud: 'aws',
     regions: [
       { region: 'us-east-1', cidr: '10.0.0.0/16', zones: ['use1-az1', 'use1-az2'] },
-      { region: 'us-west-2', cidr: '10.1.0.0/16' },
     ],
     status: 'ready',
     createdAt: sevenDaysAgo,

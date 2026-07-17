@@ -445,11 +445,10 @@ const confirmDelete = () => {
 
   th {
     color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
+    font-size: $kui-font-size-30;
     font-weight: $kui-font-weight-semibold;
     padding: $kui-space-40 $kui-space-50;
     text-align: left;
-    text-transform: uppercase;
   }
 
   td {

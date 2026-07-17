@@ -605,6 +605,7 @@
                     <th>Network</th>
                     <th>CIDR</th>
                     <th>Zones</th>
+                    <th>Network status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -613,11 +614,26 @@
                     :key="di"
                     :data-testid="`review-deployment-row-${di}`"
                   >
-                    <td>{{ providerLabel(deployment.provider) }}</td>
-                    <td>{{ regionLabel(deployment.region) }}</td>
+                    <td>
+                      <span class="cell-icon">
+                        <component :is="providerIcon(deployment.provider)" :size="KUI_ICON_SIZE_20" decorative />
+                        {{ providerLabel(deployment.provider) }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="cell-icon">
+                        <component :is="regionFlag(deployment.region)" :size="KUI_ICON_SIZE_20" decorative />
+                        {{ regionLabel(deployment.region) }}
+                      </span>
+                    </td>
                     <td>{{ deploymentNetwork(deployment).name || '—' }}</td>
                     <td>{{ deploymentNetwork(deployment).cidr || '—' }}</td>
                     <td>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</td>
+                    <td>
+                      <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
+                        {{ networkStatusText(deploymentNetwork(deployment).status) }}
+                      </KBadge>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1729,12 +1745,10 @@ const finish = (destination: { name: string }) => {
 
   th {
     color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
+    font-size: $kui-font-size-30;
     font-weight: $kui-font-weight-semibold;
-    letter-spacing: 0.04em;
     padding: $kui-space-40 $kui-space-50;
     text-align: left;
-    text-transform: uppercase;
   }
 
   td {
@@ -1743,6 +1757,12 @@ const finish = (destination: { name: string }) => {
     font-size: $kui-font-size-40;
     padding: $kui-space-50;
     vertical-align: middle;
+  }
+
+  .cell-icon {
+    align-items: center;
+    display: flex;
+    gap: $kui-space-30;
   }
 }
 

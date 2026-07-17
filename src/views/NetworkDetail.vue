@@ -98,7 +98,44 @@
 
       <!-- ── Overview tab ─────────────────────────────────────── -->
       <div v-if="activeTab === '#overview'" class="tab-content">
-        <!-- Section 1 — About this network (consolidated metadata) -->
+        <!-- Next steps (conditional) — surfaced first so the primary action is up top -->
+        <section
+          v-if="showNextStep && nextSteps.length"
+          class="detail-card next-step-card"
+          data-testid="next-step"
+        >
+          <div class="next-step-head">
+            <h3 class="numbered-title">Next steps</h3>
+            <button
+              type="button"
+              class="next-step-close"
+              aria-label="Dismiss next steps"
+              @click="showNextStep = false"
+            >
+              <CloseIcon decorative />
+            </button>
+          </div>
+          <div class="next-step-grid">
+            <button
+              v-for="ns in nextSteps"
+              :key="ns.key"
+              type="button"
+              class="next-step-item"
+              :data-testid="`next-step-${ns.key}`"
+              @click="ns.handler"
+            >
+              <span class="next-step-icon" :class="`next-step-icon--${ns.tone}`">
+                <component :is="ns.icon" :size="KUI_ICON_SIZE_30" decorative />
+              </span>
+              <span class="next-step-text">
+                <span class="next-step-title">{{ ns.title }}</span>
+                <span class="next-step-desc">{{ ns.desc }}</span>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <!-- About this network (consolidated metadata) -->
         <section class="detail-card about-card" data-testid="about-network">
           <div class="about-head">
             <h2 class="section-title">About this network</h2>
@@ -241,42 +278,6 @@
           <p v-else class="section-help gw-empty">No gateways are using this network yet.</p>
         </section>
 
-        <!-- Section 4 — Next steps (conditional) -->
-        <section
-          v-if="showNextStep && nextSteps.length"
-          class="detail-card next-step-card"
-          data-testid="next-step"
-        >
-          <div class="next-step-head">
-            <h3 class="numbered-title">Next steps</h3>
-            <button
-              type="button"
-              class="next-step-close"
-              aria-label="Dismiss next steps"
-              @click="showNextStep = false"
-            >
-              <CloseIcon decorative />
-            </button>
-          </div>
-          <div class="next-step-grid">
-            <button
-              v-for="ns in nextSteps"
-              :key="ns.key"
-              type="button"
-              class="next-step-item"
-              :data-testid="`next-step-${ns.key}`"
-              @click="ns.handler"
-            >
-              <span class="next-step-icon" :class="`next-step-icon--${ns.tone}`">
-                <component :is="ns.icon" :size="KUI_ICON_SIZE_30" decorative />
-              </span>
-              <span class="next-step-text">
-                <span class="next-step-title">{{ ns.title }}</span>
-                <span class="next-step-desc">{{ ns.desc }}</span>
-              </span>
-            </button>
-          </div>
-        </section>
       </div>
 
       <!-- ── Connectivity tab ─────────────────────────────────── -->
@@ -949,11 +950,10 @@ const handleContactSupport = () => {
 
   th {
     color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
+    font-size: $kui-font-size-30;
     font-weight: $kui-font-weight-semibold;
     padding: $kui-space-40 $kui-space-50;
     text-align: left;
-    text-transform: uppercase;
   }
 
   td {
