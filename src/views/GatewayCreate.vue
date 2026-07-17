@@ -7,9 +7,9 @@
       class="gateway-create"
       data-testid="gateway-create"
     >
-      <WizardStepper
-        :labels="stepLabels"
-        :current="stepperCurrent"
+      <KStepper
+        class="gateway-stepper"
+        :steps="stepperSteps"
       />
 
       <!-- ── STEP 0 — Control plane ─────────────────────────────────────── -->
@@ -766,9 +766,9 @@ import {
   KButton,
   KCodeBlock,
   KModal,
+  KStepper,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
-import WizardStepper from '@/components/WizardStepper.vue'
 import ExplainerPanel from '@/components/GatewayExplainerPanel.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
@@ -865,6 +865,13 @@ const stepLabels = computed(() => {
 })
 // `step` stays 0-indexed against the full flow; shift it when the CP step is hidden.
 const stepperCurrent = computed(() => (dpOnly ? step.value - 1 : step.value))
+// Steps for the DS KStepper: each label + its state (completed / active / default).
+const stepperSteps = computed(() =>
+  stepLabels.value.map((label, i) => ({
+    label,
+    state: i < stepperCurrent.value ? 'completed' : i === stepperCurrent.value ? 'active' : 'default',
+  })),
+)
 
 // ── Region metadata ─────────────────────────────────────────────────────────
 const REGION_LABELS: Record<string, string> = {
@@ -1733,15 +1740,18 @@ const finish = (destination: { name: string }) => {
 }
 
 .config-code-block {
+  flex: 1 1 auto;
   max-height: 30rem;
+  min-height: 0;
   overflow: auto;
 }
 
 // ── Review: side-by-side config + summary rail (metering-inspired) ───────────────
+// Two equal-height cards side by side (Summary + configuration).
 .review-layout {
-  align-items: start;
+  align-items: stretch;
   display: grid;
-  gap: $kui-space-80;
+  gap: $kui-space-70;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr);
 
   @media (max-width: 1080px) {
@@ -1750,14 +1760,18 @@ const finish = (destination: { name: string }) => {
 }
 
 .review-config {
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
   display: flex;
   flex-direction: column;
-  gap: $kui-space-60;
+  gap: $kui-space-50;
   min-width: 0;
+  padding: $kui-space-70;
 }
 
 .review-config-head {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
   gap: $kui-space-60;
   justify-content: space-between;
@@ -1771,7 +1785,6 @@ const finish = (destination: { name: string }) => {
 // Summary rail — matches the metering "Meter Summary" card: white, label-left /
 // value-right rows.
 .review-summary-rail {
-  align-self: start;
   background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
