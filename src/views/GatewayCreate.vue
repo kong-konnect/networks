@@ -646,11 +646,9 @@
                 <h3 class="numbered-title">Data plane configuration</h3>
                 <p class="section-help">The configuration that will be applied when you create the gateway.</p>
               </div>
-              <KSelect
+              <KSegmentedControl
                 v-model="codeLang"
-                :items="codeLangOptions"
-                appearance="select"
-                :width="'130px'"
+                :options="codeLangOptions"
                 data-testid="config-lang-toggle"
               />
             </div>
@@ -755,6 +753,7 @@ import {
   KTextArea,
   KLabel,
   KSelect,
+  KSegmentedControl,
   KCheckbox,
   KBadge,
   KButton,

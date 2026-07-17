@@ -76,17 +76,21 @@
         </template>
 
         <template #provider="{ row }">
-          <KBadge :appearance="cloudBadgeAppearance(row.cloud)">
-            {{ row.cloud.toUpperCase() }}
-          </KBadge>
+          <span class="cell-icon">
+            <component :is="providerIcon(row.cloud)" :size="KUI_ICON_SIZE_20" decorative />
+            {{ providerLabel(row.cloud) }}
+          </span>
         </template>
 
         <template #regions="{ row }">
-          <span class="regions-text">{{ row.regions.map((r: any) => r.region).join(', ') }}</span>
+          <span class="cell-icon">
+            <component :is="regionFlag(row.regions[0].region)" :size="KUI_ICON_SIZE_20" decorative />
+            {{ regionLabel(row.regions[0].region) }}
+          </span>
         </template>
 
         <template #cidr="{ row }">
-          <span class="regions-text">{{ row.regions.map((r: any) => r.cidr).join(', ') }}</span>
+          <span class="regions-text">{{ row.regions[0]?.cidr }}</span>
         </template>
 
         <template #zones="{ row }">
@@ -150,6 +154,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   KUI_COLOR_TEXT_DECORATIVE_AQUA,
+  KUI_ICON_SIZE_20,
   KUI_ICON_SIZE_30,
 } from '@kong/design-tokens'
 import {
@@ -170,6 +175,7 @@ import {
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { providerIcon, providerLabel, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { Network } from '@/types'
 
 const router = useRouter()
@@ -310,6 +316,13 @@ const confirmDelete = () => {
   .warn-icon {
     color: $kui-color-text-warning;
   }
+}
+
+.cell-icon {
+  align-items: center;
+  display: inline-flex;
+  gap: $kui-space-30;
+  white-space: nowrap;
 }
 
 .regions-text {

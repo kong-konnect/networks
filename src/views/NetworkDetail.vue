@@ -188,64 +188,87 @@
           </div>
         </section>
 
-        <!-- Section 2 — Private connectivity + Private DNS summaries -->
-        <div class="overview-cols">
-          <section class="detail-card summary-card" data-testid="connectivity-summary">
-            <div class="summary-head">
+        <!-- Section 2 — Private connectivity (entry list) -->
+        <section class="detail-card" data-testid="connectivity-summary">
+          <div class="section-header">
+            <div class="section-header-text">
               <h3 class="numbered-title">Private connectivity</h3>
-              <a
-                v-if="connectivitySummary.total"
-                class="row-action"
-                href="#"
-                @click.prevent="viewTab('#connectivity')"
-              >View all</a>
+              <p class="section-help">{{ connections.length }} connection{{ connections.length === 1 ? '' : 's' }} on this network.</p>
             </div>
-            <template v-if="connectivitySummary.total">
-              <div class="summary-count">
-                <span class="summary-number">{{ connectivitySummary.total }}</span>
-                <span class="summary-unit">connection{{ connectivitySummary.total === 1 ? '' : 's' }}</span>
-              </div>
-              <div class="summary-chips">
-                <KBadge v-if="connectivitySummary.ready" appearance="success">{{ connectivitySummary.ready }} Ready</KBadge>
-                <KBadge v-if="connectivitySummary.pending" appearance="warning">{{ connectivitySummary.pending }} Pending customer action</KBadge>
-                <KBadge v-if="connectivitySummary.error" appearance="danger">{{ connectivitySummary.error }} Error</KBadge>
-                <KBadge v-if="connectivitySummary.creating" appearance="info">{{ connectivitySummary.creating }} Creating</KBadge>
-              </div>
-              <p v-if="connectivityTypes.length" class="summary-types">{{ connectivityTypes.join(' · ') }}</p>
-            </template>
-            <template v-else>
-              <p class="section-help gw-empty">No private connectivity configured.</p>
-              <a class="row-action" href="#" @click.prevent="goToAddConnection">Add connection</a>
-            </template>
-          </section>
+            <a
+              v-if="connections.length"
+              class="row-action"
+              href="#"
+              @click.prevent="viewTab('#connectivity')"
+            >View all</a>
+          </div>
+          <table v-if="connections.length" class="rows-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="conn in connections"
+                :key="conn.id"
+                class="clickable-row"
+                @click="goToConnection(conn.id)"
+              >
+                <td class="conn-name">{{ conn.name }}</td>
+                <td>{{ connectionTypeLabel(conn.type) }}</td>
+                <td><KBadge :appearance="statusBadgeAppearance(conn.status)">{{ statusLabel(conn.status) }}</KBadge></td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="mini-empty">
+            <p class="section-help">No private connectivity configured.</p>
+            <a class="row-action" href="#" @click.prevent="goToAddConnection">Add connection</a>
+          </div>
+        </section>
 
-          <section class="detail-card summary-card" data-testid="dns-summary">
-            <div class="summary-head">
+        <!-- Section 2b — Private DNS (entry list) -->
+        <section class="detail-card" data-testid="dns-summary">
+          <div class="section-header">
+            <div class="section-header-text">
               <h3 class="numbered-title">Private DNS</h3>
-              <a
-                v-if="dnsSummary.total"
-                class="row-action"
-                href="#"
-                @click.prevent="viewTab('#dns')"
-              >View all</a>
+              <p class="section-help">{{ dnsList.length }} configuration{{ dnsList.length === 1 ? '' : 's' }} on this network.</p>
             </div>
-            <template v-if="dnsSummary.total">
-              <div class="summary-count">
-                <span class="summary-number">{{ dnsSummary.total }}</span>
-                <span class="summary-unit">configuration{{ dnsSummary.total === 1 ? '' : 's' }}</span>
-              </div>
-              <div class="summary-chips">
-                <KBadge v-if="dnsSummary.ready" appearance="success">{{ dnsSummary.ready }} Ready</KBadge>
-                <KBadge v-if="dnsSummary.pending" appearance="warning">{{ dnsSummary.pending }} Pending</KBadge>
-                <KBadge v-if="dnsSummary.error" appearance="danger">{{ dnsSummary.error }} Resolver issue</KBadge>
-              </div>
-            </template>
-            <template v-else>
-              <p class="section-help gw-empty">No private DNS configured.</p>
-              <a class="row-action" href="#" @click.prevent="openAddDns">Add private DNS</a>
-            </template>
-          </section>
-        </div>
+            <a
+              v-if="dnsList.length"
+              class="row-action"
+              href="#"
+              @click.prevent="viewTab('#dns')"
+            >View all</a>
+          </div>
+          <table v-if="dnsList.length" class="rows-table">
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th>Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="dns in dnsList"
+                :key="dns.id"
+                class="clickable-row"
+                @click="goToDns(dns.id)"
+              >
+                <td class="conn-name">{{ dns.name }}</td>
+                <td>{{ dnsTypeLabel(dns.type) }}</td>
+                <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="mini-empty">
+            <p class="section-help">No private DNS configured.</p>
+            <a class="row-action" href="#" @click.prevent="openAddDns">Add private DNS</a>
+          </div>
+        </section>
 
         <!-- Section 3 — Used by -->
         <section class="detail-card" data-testid="used-by">
@@ -613,7 +636,8 @@ const REGION_NAMES: Record<string, string> = {
   'ap-southeast-1': 'Asia Pacific (Singapore)', 'europe-west1': 'Europe (Belgium)',
   westeurope: 'West Europe', eastus: 'East US',
 }
-const regionName = (code: string) => REGION_NAMES[code] ? `${REGION_NAMES[code]} · ${code}` : code
+// Reference format: "US East (N. Virginia) (us-east-1)".
+const regionName = (code: string) => REGION_NAMES[code] ? `${REGION_NAMES[code]} (${code})` : code
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('en-US', {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -967,6 +991,21 @@ const handleContactSupport = () => {
   .details-cell {
     color: $kui-color-text-neutral-stronger;
   }
+
+  .clickable-row {
+    cursor: pointer;
+
+    &:hover td {
+      background-color: $kui-color-background-neutral-weakest;
+    }
+  }
+}
+
+.mini-empty {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-30;
 }
 
 .row-action {
