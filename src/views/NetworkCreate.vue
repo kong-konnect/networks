@@ -5,6 +5,8 @@
     :back-to="{ name: 'networks-list' }"
   >
     <div class="network-create">
+      <div class="create-layout">
+        <div class="create-main">
       <!-- Orientation (not a blocking gate) -->
       <KAlert
         appearance="info"
@@ -103,29 +105,6 @@
               :error-message="cidrError"
               @update:model-value="validateCidr"
             />
-            <button
-              type="button"
-              class="cidr-help-toggle"
-              data-testid="cidr-help-toggle"
-              @click="showCidrHelp = !showCidrHelp"
-            >
-              <component :is="showCidrHelp ? ChevronUpIcon : ChevronDownIcon" :size="KUI_ICON_SIZE_20" decorative />
-              {{ showCidrHelp ? 'Hide CIDR help' : 'Show CIDR help' }}
-            </button>
-            <div v-if="showCidrHelp" class="cidr-help">
-              <p class="cidr-help-title">Notes when selecting your CIDR block:</p>
-              <p>A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. To prevent conflicts, this CIDR block should not overlap with CIDR blocks assigned in your own Cloud Service Provider (CSP) networks.</p>
-              <p class="cidr-help-subtitle">CIDR requirements</p>
-              <ul>
-                <li><strong>Prefix length:</strong> the CIDR block must have a prefix length between /16 and /23. /23 blocks are only supported up to 3 availability zones.</li>
-                <li><strong>Private IP range:</strong> the entire CIDR block must fall within one of these private IP ranges: 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, 198.18.0.0/15.</li>
-              </ul>
-              <p class="cidr-help-subtitle">Restrictions</p>
-              <ul>
-                <li>Your CIDR block must not overlap with any IP ranges already in use by your organization. Overlapping ranges can prevent VPC peering from working correctly.</li>
-                <li>It must not overlap with these reserved ranges: 10.100.0.0/16, 172.17.0.0/16.</li>
-              </ul>
-            </div>
           </div>
         </div>
 
@@ -189,6 +168,29 @@
           {{ isSubmitting ? 'Creating network…' : 'Create network' }}
         </KButton>
       </footer>
+        </div>
+
+        <!-- Persistent CIDR guidance — getting the CIDR right matters, so keep it visible -->
+        <aside class="help-panel" data-testid="cidr-help-panel">
+          <div class="help-panel-head">
+            <InfoIcon :size="KUI_ICON_SIZE_30" decorative />
+            <h3 class="help-panel-title">Choosing a CIDR block</h3>
+          </div>
+          <p class="help-panel-text">A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. It can't be changed after creation, and shouldn't overlap with CIDR blocks in your own cloud networks.</p>
+
+          <h4 class="help-panel-subtitle">Requirements</h4>
+          <ul class="help-panel-list">
+            <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
+            <li><strong>Private IP range:</strong> the block must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
+          </ul>
+
+          <h4 class="help-panel-subtitle">Avoid</h4>
+          <ul class="help-panel-list">
+            <li>Ranges already used by your organization — overlaps break VPC peering.</li>
+            <li>Reserved ranges 10.100.0.0/16 and 172.17.0.0/16.</li>
+          </ul>
+        </aside>
+      </div>
     </div>
   </PageLayout>
 </template>
@@ -197,7 +199,7 @@
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { ChevronDownIcon, ChevronUpIcon, ProgressIcon } from '@kong/icons'
+import { InfoIcon, ProgressIcon } from '@kong/icons'
 import {
   KAlert,
   KButton,
@@ -229,7 +231,6 @@ const form = reactive({
 
 const nameError = ref('')
 const cidrError = ref('')
-const showCidrHelp = ref(false)
 const isSubmitting = ref(false)
 
 const providerOptions = [
@@ -326,10 +327,82 @@ const handleCreate = () => {
 @use "@kong/design-tokens/tokens/scss/variables" as *;
 
 .network-create {
+  max-width: 1120px;
+}
+
+// Two columns: the form on the left, persistent guidance on the right.
+.create-layout {
+  align-items: start;
+  display: grid;
+  gap: $kui-space-80;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.create-main {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
-  max-width: 760px;
+  min-width: 0;
+}
+
+// Sticky CIDR guidance panel.
+.help-panel {
+  background-color: $kui-color-background-neutral-weakest;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-40;
+  padding: $kui-space-70;
+  position: sticky;
+  top: $kui-space-70;
+
+  @media (max-width: 900px) {
+    position: static;
+  }
+
+  .help-panel-head {
+    align-items: center;
+    color: $kui-color-text-primary;
+    display: flex;
+    gap: $kui-space-30;
+  }
+
+  .help-panel-title {
+    color: $kui-color-text;
+    font-size: $kui-font-size-40;
+    font-weight: $kui-font-weight-semibold;
+    margin: $kui-space-0;
+  }
+
+  .help-panel-text {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-30;
+    line-height: $kui-line-height-40;
+    margin: $kui-space-0;
+  }
+
+  .help-panel-subtitle {
+    color: $kui-color-text;
+    font-size: $kui-font-size-30;
+    font-weight: $kui-font-weight-semibold;
+    margin: $kui-space-30 $kui-space-0 $kui-space-0;
+  }
+
+  .help-panel-list {
+    color: $kui-color-text-neutral;
+    display: flex;
+    flex-direction: column;
+    font-size: $kui-font-size-30;
+    gap: $kui-space-20;
+    line-height: $kui-line-height-40;
+    margin: $kui-space-0;
+    padding-left: $kui-space-70;
+  }
 }
 
 .form-card {
@@ -401,39 +474,6 @@ const handleCreate = () => {
   align-items: center;
   display: flex;
   gap: $kui-space-30;
-}
-
-.cidr-help-toggle {
-  align-items: center;
-  align-self: flex-start;
-  background: none;
-  border: none;
-  color: $kui-color-text-primary;
-  cursor: pointer;
-  display: flex;
-  font-size: $kui-font-size-30;
-  font-weight: $kui-font-weight-semibold;
-  gap: $kui-space-20;
-  padding: $kui-space-0;
-}
-
-.cidr-help {
-  background-color: $kui-color-background-neutral-weakest;
-  border-radius: $kui-border-radius-30;
-  color: $kui-color-text-neutral;
-  display: flex;
-  flex-direction: column;
-  font-size: $kui-font-size-30;
-  gap: $kui-space-30;
-  line-height: $kui-line-height-40;
-  padding: $kui-space-60;
-
-  p { margin: $kui-space-0; }
-
-  .cidr-help-title { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
-  .cidr-help-subtitle { color: $kui-color-text; font-weight: $kui-font-weight-semibold; margin-top: $kui-space-20; }
-
-  ul { display: flex; flex-direction: column; gap: $kui-space-20; margin: $kui-space-0; padding-left: $kui-space-70; }
 }
 
 .zone-box {
