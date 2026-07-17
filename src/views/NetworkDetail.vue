@@ -204,7 +204,39 @@
           </div>
         </section>
 
-        <!-- Section 2 — Private connectivity + Private DNS (50/50) -->
+        <!-- Section 2 — Stats strip (Mesh "Global control plane stats" pattern) -->
+        <section class="detail-card stats-strip" data-testid="network-stats">
+          <div class="stat">
+            <span class="stat-head">
+              <RuntimesIcon :size="KUI_ICON_SIZE_20" decorative />
+              Attached gateways
+            </span>
+            <span class="stat-value">{{ network.attachedGatewayCount }}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-head">
+              <ConnectionsIcon :size="KUI_ICON_SIZE_20" decorative />
+              Private connections
+            </span>
+            <span class="stat-value">{{ connections.length }}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-head">
+              <WorldPrivateIcon :size="KUI_ICON_SIZE_20" decorative />
+              Private DNS
+            </span>
+            <span class="stat-value">{{ dnsList.length }}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-head">
+              <LocationIcon :size="KUI_ICON_SIZE_20" decorative />
+              Zones
+            </span>
+            <span class="stat-value">{{ network.regions[0].zones?.length ?? 0 }}</span>
+          </div>
+        </section>
+
+        <!-- Section 3 — Private connectivity + Private DNS (50/50) -->
         <div class="overview-cols">
           <section class="detail-card" data-testid="connectivity-summary">
             <div class="section-header-text">
@@ -238,9 +270,17 @@
                 </tr>
               </tbody>
             </table>
-            <div v-else class="mini-empty">
-              <p class="section-help">No private connectivity configured.</p>
-              <a class="row-action" href="#" @click.prevent="goToAddConnection">Add connection</a>
+            <div v-else class="card-empty">
+              <span class="card-empty-icon"><ConnectionsIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+              <h4 class="card-empty-title">No private connectivity yet</h4>
+              <p class="card-empty-desc">Connect this network so clients can reach Kong and Kong can reach your upstream services.</p>
+              <div class="card-empty-actions">
+                <KButton appearance="primary" @click="goToAddConnection">
+                  <AddCircleIcon decorative />
+                  Add connection
+                </KButton>
+                <KButton appearance="tertiary">Learn more</KButton>
+              </div>
             </div>
           </section>
 
@@ -276,9 +316,17 @@
                 </tr>
               </tbody>
             </table>
-            <div v-else class="mini-empty">
-              <p class="section-help">No private DNS configured.</p>
-              <a class="row-action" href="#" @click.prevent="openAddDns">Add private DNS</a>
+            <div v-else class="card-empty">
+              <span class="card-empty-icon"><WorldPrivateIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+              <h4 class="card-empty-title">No private DNS yet</h4>
+              <p class="card-empty-desc">Add private DNS to resolve private service names reached through this network.</p>
+              <div class="card-empty-actions">
+                <KButton appearance="primary" @click="openAddDns">
+                  <AddCircleIcon decorative />
+                  Add private DNS
+                </KButton>
+                <KButton appearance="tertiary">Learn more</KButton>
+              </div>
             </div>
           </section>
         </div>
@@ -587,6 +635,7 @@ import {
   WorldPrivateIcon,
   PlugIcon,
   ListIcon,
+  RuntimesIcon,
   AwsIcon,
   GoogleCloudIcon,
   AzureIcon,
@@ -1036,6 +1085,93 @@ const handleContactSupport = () => {
   display: flex;
   flex-direction: column;
   gap: $kui-space-30;
+}
+
+// Stats strip — Mesh "Global control plane stats" pattern (one card, divided tiles).
+.stats-strip {
+  flex-direction: row;
+  gap: $kui-space-0;
+  padding: $kui-space-0;
+
+  .stat {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: $kui-space-30;
+    padding: $kui-space-70;
+
+    &:not(:first-child) {
+      border-left: $kui-border-width-10 solid $kui-color-border;
+    }
+  }
+
+  .stat-head {
+    align-items: center;
+    color: $kui-color-text-neutral;
+    display: flex;
+    font-size: $kui-font-size-30;
+    gap: $kui-space-30;
+  }
+
+  .stat-value {
+    color: $kui-color-text;
+    font-size: $kui-font-size-70;
+    font-weight: $kui-font-weight-bold;
+    line-height: $kui-line-height-30;
+  }
+
+  @media (max-width: 760px) {
+    flex-wrap: wrap;
+
+    .stat {
+      flex-basis: 50%;
+
+      &:nth-child(-n + 2) { border-bottom: $kui-border-width-10 solid $kui-color-border; }
+      &:nth-child(odd) { border-left: none; }
+    }
+  }
+}
+
+// Prominent empty state inside the connectivity / DNS cards (Mesh "Create your first…").
+.card-empty {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-40;
+  padding: $kui-space-80 $kui-space-60;
+  text-align: center;
+
+  .card-empty-icon {
+    align-items: center;
+    background-color: $kui-color-background-primary-weakest;
+    border-radius: $kui-border-radius-30;
+    color: $kui-color-text-primary;
+    display: flex;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+  }
+
+  .card-empty-title {
+    color: $kui-color-text;
+    font-size: $kui-font-size-40;
+    font-weight: $kui-font-weight-semibold;
+    margin: $kui-space-0;
+  }
+
+  .card-empty-desc {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-30;
+    line-height: $kui-line-height-40;
+    margin: $kui-space-0;
+    max-width: 320px;
+  }
+
+  .card-empty-actions {
+    display: flex;
+    gap: $kui-space-40;
+    margin-top: $kui-space-20;
+  }
 }
 
 .row-action {
