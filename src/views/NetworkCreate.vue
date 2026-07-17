@@ -143,10 +143,10 @@
             </p>
           </div>
         </div>
+      </section>
 
-        <hr class="divider">
-
-        <!-- Private connectivity (optional) -->
+      <!-- Private connectivity (optional) — separate container -->
+      <section class="form-card optional-card" data-testid="connectivity-card">
         <div class="form-section">
           <button
             type="button"
@@ -192,10 +192,10 @@
             </div>
           </div>
         </div>
+      </section>
 
-        <hr class="divider">
-
-        <!-- Private DNS (optional) -->
+      <!-- Private DNS (optional) — separate container -->
+      <section class="form-card optional-card" data-testid="dns-card">
         <div class="form-section">
           <button
             type="button"
