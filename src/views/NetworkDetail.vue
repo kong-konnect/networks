@@ -436,6 +436,7 @@
           :connections="connections"
           :gateways="gateways"
           :dns-configs="dnsList"
+          :services="servicePaths"
         />
       </div>
 
@@ -712,6 +713,7 @@ const networkId = computed(() => route.params.id as string)
 const network = computed(() => store.getNetworkById(networkId.value))
 const connections = computed(() => store.getConnectionsByNetworkId(networkId.value))
 const gateways = computed(() => store.getGatewaysByNetworkId(networkId.value))
+const servicePaths = computed(() => store.getServicePathsByNetworkId(networkId.value))
 
 const activeTab = ref('#overview')
 const showNextStep = ref(true)

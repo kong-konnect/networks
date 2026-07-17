@@ -330,11 +330,58 @@ const initialGateways: Gateway[] = [
   },
 ]
 
+// A gateway service reaching a private upstream — the entry point for a path trace.
+// Links the full chain: service → its DNS config → the connection that carries it → target.
+export interface ServicePath {
+  id: string
+  networkId: string
+  name: string
+  gatewayName: string
+  upstream: string
+  dnsConfigId: string
+  connectionId: string
+  target: { name: string; address: string; status: 'reachable' | 'unreachable' | 'pending' }
+}
+
+const initialServicePaths: ServicePath[] = [
+  {
+    id: 'svc-1',
+    networkId: 'net-1',
+    name: 'payments-service',
+    gatewayName: 'prod-gateway-us-east-1',
+    upstream: 'payments.internal.company.com',
+    dnsConfigId: 'dns-1',
+    connectionId: 'conn-7',
+    target: { name: 'payments-api.internal', address: '10.80.12.15', status: 'reachable' },
+  },
+  {
+    id: 'svc-2',
+    networkId: 'net-1',
+    name: 'shared-tools-service',
+    gatewayName: 'prod-gateway-us-east-1',
+    upstream: 'shared.internal.company.com',
+    dnsConfigId: 'dns-2',
+    connectionId: 'conn-3',
+    target: { name: 'shared-resolver.internal', address: '10.90.4.10', status: 'unreachable' },
+  },
+  {
+    id: 'svc-3',
+    networkId: 'net-1',
+    name: 'ml-service',
+    gatewayName: 'prod-gateway-us-west-2',
+    upstream: 'ml.internal.company.com',
+    dnsConfigId: 'dns-3',
+    connectionId: 'conn-7',
+    target: { name: 'ml-api.internal', address: 'pending', status: 'pending' },
+  },
+]
+
 // ── Singleton store ─────────────────────────────────────────────────────────
 
 const networks = ref<Network[]>(initialNetworks)
 const connections = ref<Connection[]>(initialConnections)
 const gateways = ref<Gateway[]>(initialGateways)
+const servicePaths = ref<ServicePath[]>(initialServicePaths)
 
 // Configuration captured by the gateway-creation wizard, surfaced on the
 // control-plane overview after creation (so captured config isn't thrown away).
@@ -362,6 +409,9 @@ export function useNetworksStore() {
 
   const getGatewaysByNetworkId = (networkId: string) =>
     gateways.value.filter(g => g.networkId === networkId)
+
+  const getServicePathsByNetworkId = (networkId: string) =>
+    servicePaths.value.filter(s => s.networkId === networkId)
 
   // "default"-named networks are inactive per-region placeholders from a legacy
   // workaround — treat them as if no real network exists (mirrors production).
@@ -547,6 +597,7 @@ export function useNetworksStore() {
     getNetworkById,
     getConnectionsByNetworkId,
     getGatewaysByNetworkId,
+    getServicePathsByNetworkId,
     getConnectionById,
     isPlaceholderNetwork,
     getSelectableNetworksByRegion,

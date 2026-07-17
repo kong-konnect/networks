@@ -1,7 +1,56 @@
 <template>
   <div class="ncm">
+    <!-- Trace a path, entered from a gateway service -->
+    <div v-if="services.length" class="ncm-trace-picker">
+      <span class="ncm-trace-label">Trace a path</span>
+      <div class="ncm-trace-chips">
+        <button
+          v-for="s in services"
+          :key="s.id"
+          type="button"
+          class="ncm-trace-chip"
+          :class="{ 'ncm-trace-chip--active': tracedId === s.id }"
+          :data-testid="`ncm-trace-${s.id}`"
+          @click="tracedId = tracedId === s.id ? null : s.id"
+        >
+          <span class="ncm-dot" :class="`ncm-dot--${servicePathTone(s)}`" />
+          {{ s.name }}
+        </button>
+        <button
+          v-if="tracedService"
+          type="button"
+          class="ncm-trace-clear"
+          data-testid="ncm-trace-clear"
+          @click="tracedId = null"
+        >
+          Clear trace
+        </button>
+      </div>
+    </div>
+
+    <!-- Trace view: one path, end to end -->
+    <div v-if="tracedService" class="ncm-trace" data-testid="ncm-trace">
+      <div class="ncm-trace-chain">
+        <template v-for="(hop, i) in traceHops" :key="hop.key">
+          <div
+            class="ncm-hop"
+            :class="[`ncm-hop--${hop.tone}`, { 'ncm-hop--broken': brokenHop && brokenHop.key === hop.key }]"
+          >
+            <span class="ncm-node-kicker">{{ hop.kicker }}</span>
+            <span class="ncm-hop-title">{{ hop.title }}</span>
+            <span class="ncm-node-sub">{{ hop.sub }}</span>
+            <span class="ncm-node-status" :class="`ncm-node-status--${hop.tone}`">{{ hop.status }}</span>
+          </div>
+          <span v-if="i < traceHops.length - 1" class="ncm-hop-arrow" :class="`ncm-hop-arrow--${traceHops[i + 1].tone}`">→</span>
+        </template>
+      </div>
+      <div class="ncm-trace-summary" :class="`ncm-trace-summary--${traceSummaryTone}`">
+        {{ traceSummary }}
+      </div>
+    </div>
+
     <!-- Toolbar: what's on screen + reveal healthy -->
-    <div class="ncm-toolbar">
+    <div v-if="!tracedService" class="ncm-toolbar">
       <p class="ncm-caption">
         <template v-if="problemNodes.length">
           {{ problemNodes.length }} relationship{{ problemNodes.length === 1 ? '' : 's' }} need{{ problemNodes.length === 1 ? 's' : '' }} attention.
@@ -24,7 +73,7 @@
       </KButton>
     </div>
 
-    <div class="ncm-body">
+    <div v-if="!tracedService" class="ncm-body">
       <!-- Map canvas (fixed coordinate space; scrolls on small screens) -->
       <div class="ncm-scroll">
         <div class="ncm-canvas" data-testid="ncm-canvas">
@@ -104,7 +153,7 @@
     </div>
 
     <!-- Legend -->
-    <div class="ncm-legendbar">
+    <div v-if="!tracedService" class="ncm-legendbar">
       <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--ready" />Healthy</span>
       <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--pending" />Pending / needs action</span>
       <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--error" />Error</span>
@@ -118,6 +167,7 @@
 import { ref, computed } from 'vue'
 import { KBadge, KButton } from '@kong/kongponents'
 import type { Network, Connection, Gateway, DnsConfig } from '@/types'
+import type { ServicePath } from '@/composables/useNetworksStore'
 import {
   connectionTypeLabel,
   statusLabel as connStatusLabel,
@@ -129,9 +179,11 @@ const props = withDefaults(defineProps<{
   connections: Connection[]
   gateways?: Gateway[]
   dnsConfigs?: DnsConfig[]
+  services?: ServicePath[]
 }>(), {
   gateways: () => [],
   dnsConfigs: () => [],
+  services: () => [],
 })
 
 type Tone = 'ready' | 'pending' | 'error'
@@ -280,6 +332,59 @@ const detailAction = computed<string | null>(() => {
   return null
 })
 const detailActionTone = computed(() => selected.value?.tone ?? 'ready')
+
+// ── Path trace (from a gateway service) ───────────────────────────────────────
+const tracedId = ref<string | null>(null)
+const tracedService = computed(() => props.services.find(s => s.id === tracedId.value) || null)
+
+const targetTone = (s: ServicePath['target']['status']): Tone =>
+  s === 'reachable' ? 'ready' : s === 'unreachable' ? 'error' : 'pending'
+const worstTone = (tones: Tone[]): Tone =>
+  tones.includes('error') ? 'error' : tones.includes('pending') ? 'pending' : 'ready'
+
+// Health of a whole service path (worst hop) — drives the picker chip dot.
+const servicePathTone = (s: ServicePath): Tone => {
+  const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
+  const conn = props.connections.find(c => c.id === s.connectionId)
+  return worstTone([
+    dns ? dnsTone(dns.status) : 'error',
+    conn ? connTone(conn.status) : 'error',
+    targetTone(s.target.status),
+  ])
+}
+
+interface TraceHop {
+  key: string
+  kicker: string
+  title: string
+  sub: string
+  tone: Tone
+  status: string
+}
+const traceHops = computed<TraceHop[]>(() => {
+  const s = tracedService.value
+  if (!s) return []
+  const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
+  const conn = props.connections.find(c => c.id === s.connectionId)
+  return [
+    { key: 'service', kicker: 'Gateway service', title: s.name, sub: s.gatewayName, tone: 'ready', status: 'Sending' },
+    { key: 'network', kicker: 'Network', title: props.network.name, sub: `${props.network.cloud.toUpperCase()} · ${props.network.regions[0].region}`, tone: props.network.status === 'ready' ? 'ready' : 'pending', status: netStatusLabel.value },
+    { key: 'dns', kicker: 'Private DNS', title: s.upstream, sub: dns ? dnsTypeLabel(dns.type) : 'Not configured', tone: dns ? dnsTone(dns.status) : 'error', status: dns ? dnsStatusLabel(dns.status) : 'Missing' },
+    { key: 'conn', kicker: 'Connectivity', title: conn ? conn.name : 'Not configured', sub: conn ? connectionTypeLabel(conn.type) : '—', tone: conn ? connTone(conn.status) : 'error', status: conn ? connStatusLabel(conn.status) : 'Missing' },
+    { key: 'target', kicker: 'Private target', title: s.target.name, sub: s.target.address, tone: targetTone(s.target.status), status: s.target.status === 'reachable' ? 'Reachable' : s.target.status === 'unreachable' ? 'Unreachable' : 'Pending' },
+  ]
+})
+
+// First hop that isn't healthy — where the path breaks.
+const brokenHop = computed(() => traceHops.value.find(h => h.tone !== 'ready') || null)
+const traceSummary = computed(() => {
+  const s = tracedService.value
+  if (!s) return ''
+  const b = brokenHop.value
+  if (!b) return `Traffic from ${s.name} reaches ${s.target.name}. The path is healthy.`
+  return `Traffic from ${s.name} is blocked at ${b.kicker.toLowerCase()} — ${b.title} is ${b.status.toLowerCase()}.`
+})
+const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 </script>
 
 <style scoped lang="scss">
@@ -526,5 +631,116 @@ const detailActionTone = computed(() => selected.value?.tone ?? 'ready')
   background-color: $kui-color-border;
   height: 14px;
   width: $kui-border-width-10;
+}
+
+// ── Trace picker ──────────────────────────────────────────────────────────────
+.ncm-trace-picker {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-40 $kui-space-50;
+}
+
+.ncm-trace-label {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+}
+
+.ncm-trace-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-40;
+}
+
+.ncm-trace-chip {
+  align-items: center;
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-round;
+  color: $kui-color-text;
+  cursor: pointer;
+  display: flex;
+  font-size: $kui-font-size-30;
+  gap: $kui-space-30;
+  padding: $kui-space-30 $kui-space-50;
+  transition: border-color 0.12s ease-in;
+
+  &:hover { border-color: $kui-color-border-primary; }
+  &--active {
+    background-color: $kui-color-background-primary-weakest;
+    border-color: $kui-color-border-primary;
+    color: $kui-color-text-primary;
+    font-weight: $kui-font-weight-semibold;
+  }
+}
+
+.ncm-trace-clear {
+  background: none;
+  border: none;
+  color: $kui-color-text-primary;
+  cursor: pointer;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  padding: $kui-space-30 $kui-space-40;
+}
+
+// ── Trace view (one path, left to right) ──────────────────────────────────────
+.ncm-trace {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-60;
+}
+
+.ncm-trace-chain {
+  align-items: stretch;
+  display: flex;
+  gap: $kui-space-40;
+  overflow-x: auto;
+  padding-bottom: $kui-space-40;
+}
+
+.ncm-hop {
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex: 1 0 180px;
+  flex-direction: column;
+  gap: $kui-space-20;
+  padding: $kui-space-50;
+
+  &--pending { border-left: $kui-border-width-30 solid $kui-color-background-warning; }
+  &--error { border-left: $kui-border-width-30 solid $kui-color-background-danger; }
+  &--broken { box-shadow: $kui-shadow-focus; }
+}
+
+.ncm-hop-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  overflow-wrap: anywhere;
+}
+
+.ncm-hop-arrow {
+  align-self: center;
+  color: $kui-color-text-neutral;
+  flex: 0 0 auto;
+  font-size: $kui-font-size-50;
+
+  &--pending { color: $kui-color-text-warning; }
+  &--error { color: $kui-color-text-danger; }
+  &--ready { color: $kui-color-text-success; }
+}
+
+.ncm-trace-summary {
+  border-radius: $kui-border-radius-30;
+  color: $kui-color-text;
+  font-size: $kui-font-size-30;
+  padding: $kui-space-50 $kui-space-60;
+
+  &--ready { background-color: $kui-color-background-success-weakest; }
+  &--pending { background-color: $kui-color-background-warning-weakest; }
+  &--error { background-color: $kui-color-background-danger-weakest; }
 }
 </style>
