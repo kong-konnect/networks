@@ -39,18 +39,19 @@
         @row:click="handleRowClick"
       >
         <template #name="{ row }">
-          <div class="name-cell">
-            <router-link
-              class="name-link"
-              :to="{ name: 'networks-detail', params: { id: row.id } }"
-              @click.stop
-            >
-              {{ row.name }}
-            </router-link>
-            <KBadge :appearance="stateBadgeAppearance(row.status)">
-              {{ stateLabel(row.status) }}
-            </KBadge>
-          </div>
+          <router-link
+            class="name-link"
+            :to="{ name: 'networks-detail', params: { id: row.id } }"
+            @click.stop
+          >
+            {{ row.name }}
+          </router-link>
+        </template>
+
+        <template #status="{ row }">
+          <KBadge :appearance="stateBadgeAppearance(row.status)">
+            {{ stateLabel(row.status) }}
+          </KBadge>
         </template>
 
         <template #networkId="{ row }">
@@ -98,15 +99,12 @@
         </template>
 
         <template #privateNetworking="{ row }">
-          <div v-if="hasPrivateNetworking(row)" class="pn-cell">
-            <KBadge
-              v-for="label in privateNetworkingLabels(row)"
-              :key="label"
-              appearance="info"
-            >
-              {{ label }}
-            </KBadge>
-          </div>
+          <KBadge v-if="hasPrivateNetworking(row)" appearance="success">Configured</KBadge>
+          <span v-else class="pn-none">Not configured</span>
+        </template>
+
+        <template #privateDns="{ row }">
+          <KBadge v-if="hasDns(row)" appearance="success">Configured</KBadge>
           <span v-else class="pn-none">Not configured</span>
         </template>
 
@@ -115,8 +113,20 @@
             View details
           </KDropdownItem>
           <KDropdownItem
+            :disabled="row.status !== 'ready'"
+            @click.stop="goToAddConnection(row)"
+          >
+            Add connection
+          </KDropdownItem>
+          <KDropdownItem
+            :disabled="row.status !== 'ready'"
+            @click.stop="goToTestEndpoint(row)"
+          >
+            Test endpoint
+          </KDropdownItem>
+          <KDropdownItem
             danger
-            :disabled="row.attachedGatewayCount > 0"
+            has-divider
             @click.stop="handleDeleteClick(row)"
           >
             Delete
@@ -146,6 +156,22 @@
     <p>
       Are you sure you want to delete <strong>{{ networkToDelete?.name }}</strong>?
       This action cannot be undone.
+    </p>
+  </KModal>
+
+  <!-- Blocked: network in use by gateways -->
+  <KModal
+    :visible="showBlockedDeleteModal"
+    title="Can't delete this network"
+    action-button-text="Close"
+    :hide-cancel-button="true"
+    @proceed="showBlockedDeleteModal = false"
+    @cancel="showBlockedDeleteModal = false"
+  >
+    <p>
+      <strong>{{ networkToDelete?.name }}</strong> is used by
+      {{ networkToDelete?.attachedGatewayCount }} gateway{{ networkToDelete?.attachedGatewayCount === 1 ? '' : 's' }}.
+      Detach {{ networkToDelete?.attachedGatewayCount === 1 ? 'it' : 'them' }} before deleting this network.
     </p>
   </KModal>
 </template>
@@ -185,6 +211,7 @@ const store = useNetworksStore()
 const statusFilter = ref('')
 const fetcherCacheKey = ref(0)
 const showDeleteModal = ref(false)
+const showBlockedDeleteModal = ref(false)
 const networkToDelete = ref<Network | null>(null)
 
 const statusFilterItems = [
@@ -196,6 +223,7 @@ const statusFilterItems = [
 
 const displayHeaders = [
   { label: 'Name', key: 'name', sortable: true },
+  { label: 'Status', key: 'status', sortable: true },
   { label: 'Network ID', key: 'networkId', sortable: false },
   { label: 'CGWs', key: 'cgws', sortable: true },
   { label: 'Provider', key: 'provider', sortable: true },
@@ -203,6 +231,7 @@ const displayHeaders = [
   { label: 'CIDR', key: 'cidr', sortable: false },
   { label: 'Zones', key: 'zones', sortable: false },
   { label: 'Private connectivity', key: 'privateNetworking', sortable: false },
+  { label: 'Private DNS', key: 'privateDns', sortable: false },
 ]
 
 const fetcher = async () => {
@@ -244,6 +273,15 @@ const PRIVATE_NETWORKING_LABELS: Record<string, string> = {
 const hasPrivateNetworking = (network: Network): boolean =>
   store.getConnectionsByNetworkId(network.id).length > 0
 
+const hasDns = (network: Network): boolean =>
+  (network.dnsConfigs?.length ?? 0) > 0
+
+const goToAddConnection = (network: Network) =>
+  router.push({ name: 'networks-add-connection', params: { id: network.id } })
+
+const goToTestEndpoint = (network: Network) =>
+  router.push({ name: 'networks-test-endpoint', params: { id: network.id } })
+
 const privateNetworkingLabels = (network: Network): string[] => {
   const conns = store.getConnectionsByNetworkId(network.id)
   const labels = new Set<string>()
@@ -266,7 +304,13 @@ const handleRowClick = ({ row }: { row: Network }) => {
 
 const handleDeleteClick = (network: Network) => {
   networkToDelete.value = network
-  showDeleteModal.value = true
+  // Guardrail: a network in use by gateways can't be deleted — explain why
+  // instead of silently disabling the action.
+  if (network.attachedGatewayCount > 0) {
+    showBlockedDeleteModal.value = true
+  } else {
+    showDeleteModal.value = true
+  }
 }
 
 const confirmDelete = () => {
