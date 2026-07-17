@@ -314,6 +314,14 @@
               <h3 class="numbered-title">Private connectivity</h3>
               <p class="section-help">{{ connections.length }} connection{{ connections.length === 1 ? '' : 's' }} on this network.</p>
             </div>
+            <div v-if="connectivityAttention.count" class="attention-strip" data-testid="connectivity-attention">
+              <KBadge appearance="warning">Needs attention</KBadge>
+              <span class="attention-text">{{ connectivityAttention.label }}</span>
+              <a class="attention-cta" href="#" @click.prevent="viewTab('#connectivity')">
+                Review connections
+                <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
+              </a>
+            </div>
             <table v-if="connections.length" class="rows-table">
               <thead>
                 <tr>
@@ -359,6 +367,14 @@
             <div class="section-header-text">
               <h3 class="numbered-title">Private DNS</h3>
               <p class="section-help">{{ dnsList.length }} configuration{{ dnsList.length === 1 ? '' : 's' }} on this network.</p>
+            </div>
+            <div v-if="dnsAttention.count" class="attention-strip" data-testid="dns-attention">
+              <KBadge appearance="warning">Needs attention</KBadge>
+              <span class="attention-text">{{ dnsAttention.label }}</span>
+              <a class="attention-cta" href="#" @click.prevent="viewTab('#dns')">
+                Review DNS
+                <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
+              </a>
             </div>
             <table v-if="dnsList.length" class="rows-table">
               <thead>
@@ -957,6 +973,24 @@ const dnsSummary = computed(() => {
   return s
 })
 
+// Attention summaries — surface only the actionable items (things waiting on you,
+// or in error) at the top of each overview card. Empty when everything is healthy.
+const connectivityAttention = computed(() => {
+  const { pending, error } = connectivitySummary.value
+  const parts: string[] = []
+  if (pending) parts.push(`${pending} ${pending === 1 ? 'connection requires' : 'connections require'} your action`)
+  if (error) parts.push(`${error} ${error === 1 ? 'connection has an error' : 'connections have errors'}`)
+  return { count: pending + error, label: parts.join(' · ') }
+})
+
+const dnsAttention = computed(() => {
+  const { pending, error } = dnsSummary.value
+  const parts: string[] = []
+  if (error) parts.push(`${error} resolver ${error === 1 ? 'issue' : 'issues'}`)
+  if (pending) parts.push(`${pending} ${pending === 1 ? 'configuration pending' : 'configurations pending'}`)
+  return { count: pending + error, label: parts.join(' · ') }
+})
+
 const viewTab = (hash: string) => { activeTab.value = hash }
 
 const connectionsFetcher = async () => {
@@ -1186,6 +1220,38 @@ const confirmDelete = () => {
 }
 
 // ── Light data tables ───────────────────────────────────────────────────────
+// Attention strip — pale-warning summary of actionable items above a card's table.
+.attention-strip {
+  align-items: center;
+  background-color: $kui-color-background-warning-weakest;
+  border-radius: $kui-border-radius-30;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-40 $kui-space-50;
+  margin-bottom: $kui-space-50;
+  padding: $kui-space-40 $kui-space-50;
+
+  .attention-text {
+    color: $kui-color-text-warning-strong;
+    flex: 1 1 auto;
+    font-size: $kui-font-size-30;
+    font-weight: $kui-font-weight-semibold;
+  }
+
+  .attention-cta {
+    align-items: center;
+    color: $kui-color-text-primary;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: $kui-font-size-30;
+    font-weight: $kui-font-weight-semibold;
+    gap: $kui-space-20;
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
+  }
+}
+
 .rows-table {
   border-collapse: collapse;
   width: 100%;
