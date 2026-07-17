@@ -143,6 +143,104 @@
             </p>
           </div>
         </div>
+
+        <hr class="divider">
+
+        <!-- Private connectivity (optional) -->
+        <div class="form-section">
+          <button
+            type="button"
+            class="section-toggle"
+            :aria-expanded="showConnectivity"
+            data-testid="connectivity-toggle"
+            @click="showConnectivity = !showConnectivity"
+          >
+            <span class="section-heading">
+              <span class="section-title-row">
+                <h2 class="section-title">Private connectivity</h2>
+                <KBadge appearance="neutral">Optional</KBadge>
+              </span>
+              <p class="section-help">Connect this network so clients can reach Kong and Kong can reach your services. You can also add connections after the network is ready.</p>
+            </span>
+            <ChevronDownIcon
+              class="section-chevron"
+              :class="{ 'section-chevron--open': showConnectivity }"
+              :size="KUI_ICON_SIZE_30"
+              decorative
+            />
+          </button>
+
+          <div v-if="showConnectivity" class="form-collapse" data-testid="connectivity-fields">
+            <div class="two-col">
+              <div class="form-group">
+                <KLabel>Connection type</KLabel>
+                <KSelect
+                  v-model="form.connType"
+                  :items="connTypeOptions"
+                  placeholder="Select a type"
+                  width="100%"
+                />
+              </div>
+              <div class="form-group">
+                <KLabel>Name</KLabel>
+                <KInput
+                  v-model.trim="form.connName"
+                  placeholder="e.g., prod-vpc-peering"
+                  width="100%"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Private DNS (optional) -->
+        <div class="form-section">
+          <button
+            type="button"
+            class="section-toggle"
+            :aria-expanded="showDns"
+            data-testid="dns-toggle"
+            @click="showDns = !showDns"
+          >
+            <span class="section-heading">
+              <span class="section-title-row">
+                <h2 class="section-title">Private DNS</h2>
+                <KBadge appearance="neutral">Optional</KBadge>
+              </span>
+              <p class="section-help">Resolve private service names reached through this network. You can also add private DNS after the network is ready.</p>
+            </span>
+            <ChevronDownIcon
+              class="section-chevron"
+              :class="{ 'section-chevron--open': showDns }"
+              :size="KUI_ICON_SIZE_30"
+              decorative
+            />
+          </button>
+
+          <div v-if="showDns" class="form-collapse" data-testid="dns-fields">
+            <div class="two-col">
+              <div class="form-group">
+                <KLabel>DNS type</KLabel>
+                <KSelect
+                  v-model="form.dnsType"
+                  :items="dnsTypeOptions"
+                  placeholder="Select a type"
+                  width="100%"
+                />
+              </div>
+              <div class="form-group">
+                <KLabel>Domain</KLabel>
+                <KInput
+                  v-model.trim="form.dnsDomain"
+                  placeholder="e.g., internal.company.com"
+                  width="100%"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <footer class="create-footer">
@@ -199,9 +297,10 @@
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { InfoIcon, ProgressIcon } from '@kong/icons'
+import { ChevronDownIcon, InfoIcon, ProgressIcon } from '@kong/icons'
 import {
   KAlert,
+  KBadge,
   KButton,
   KCheckbox,
   KInput,
@@ -227,7 +326,25 @@ const form = reactive({
   region: DEFAULT_REGION,
   cidr: '',
   zones: ['a', 'b', 'c'].map(s => `${DEFAULT_REGION}${s}`),
+  // Optional — can also be added after the network is ready.
+  connType: '',
+  connName: '',
+  dnsType: '',
+  dnsDomain: '',
 })
+
+const showConnectivity = ref(false)
+const showDns = ref(false)
+
+const connTypeOptions = [
+  { label: 'VPC peering', value: 'peering' },
+  { label: 'Transit Gateway', value: 'tgw' },
+  { label: 'Resource endpoint', value: 'rep' },
+]
+const dnsTypeOptions = [
+  { label: 'Private hosted zone', value: 'private-hosted-zone' },
+  { label: 'Outbound resolver', value: 'outbound-resolver' },
+]
 
 const nameError = ref('')
 const cidrError = ref('')
@@ -433,6 +550,43 @@ const handleCreate = () => {
   gap: $kui-space-20;
 }
 
+// Collapsible optional section trigger.
+.section-toggle {
+  align-items: flex-start;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  gap: $kui-space-50;
+  justify-content: space-between;
+  padding: $kui-space-0;
+  text-align: left;
+  width: 100%;
+
+  .section-heading { flex: 1 1 auto; }
+}
+
+.section-title-row {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-40;
+}
+
+.section-chevron {
+  color: $kui-color-text-neutral;
+  flex: 0 0 auto;
+  margin-top: $kui-space-10;
+  transition: transform 0.15s ease-in-out;
+
+  &--open { transform: rotate(180deg); }
+}
+
+.form-collapse {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-60;
+}
+
 .section-title {
   color: $kui-color-text;
   font-size: $kui-font-size-50;
@@ -492,9 +646,15 @@ const handleCreate = () => {
 }
 
 .create-footer {
+  background-color: $kui-color-background;
+  border-top: $kui-border-width-10 solid $kui-color-border;
+  bottom: $kui-space-0;
   display: flex;
   gap: $kui-space-40;
   justify-content: flex-end;
+  padding: $kui-space-60 $kui-space-0;
+  position: sticky;
+  z-index: 1;
 }
 
 .btn-spinner {
