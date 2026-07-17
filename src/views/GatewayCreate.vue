@@ -585,31 +585,6 @@
           </div>
 
           <div class="review-layout">
-            <!-- Main: configuration as code -->
-            <section class="review-config">
-              <div class="review-config-head">
-                <div class="numbered-heading">
-                  <h3 class="numbered-title">Data plane configuration</h3>
-                  <p class="section-help">The configuration that will be applied when you create the gateway.</p>
-                </div>
-                <div class="config-lang">
-                  <KSegmentedControl
-                    v-model="codeLang"
-                    :options="codeLangOptions"
-                    data-testid="config-lang-toggle"
-                  />
-                </div>
-              </div>
-              <KCodeBlock
-                id="gateway-config-preview"
-                class="config-code-block"
-                :code="previewCode"
-                :language="previewLanguage"
-                theme="dark"
-                data-testid="config-code-block"
-              />
-            </section>
-
             <!-- Rail: summary of what was created -->
             <aside class="review-summary-rail" data-testid="review-summary">
               <h3 class="numbered-title">Summary</h3>
@@ -668,6 +643,30 @@
                 </template>
               </dl>
             </aside>
+
+            <!-- Configuration as code -->
+            <section class="review-config">
+              <div class="review-config-head">
+                <h3 class="numbered-title">Data plane configuration</h3>
+                <div class="config-lang">
+                  <KSelect
+                    v-model="codeLang"
+                    :items="codeLangOptions"
+                    appearance="select"
+                    :width="'150px'"
+                    data-testid="config-lang-toggle"
+                  />
+                </div>
+              </div>
+              <KCodeBlock
+                id="gateway-config-preview"
+                class="config-code-block"
+                :code="previewCode"
+                :language="previewLanguage"
+                theme="dark"
+                data-testid="config-code-block"
+              />
+            </section>
           </div>
         </section>
 
@@ -1743,7 +1742,7 @@ const finish = (destination: { name: string }) => {
   align-items: start;
   display: grid;
   gap: $kui-space-80;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr);
 
   @media (max-width: 1080px) {
     grid-template-columns: minmax(0, 1fr);
