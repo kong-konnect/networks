@@ -59,37 +59,148 @@
 
     <!-- Non-ready provisioning states -->
     <template v-if="network.status !== 'ready'">
-      <div v-if="network.status === 'initialising'" class="provisioning-panel">
+      <div v-if="network.status === 'initialising'" class="provisioning-view">
+        <!-- Banner -->
         <KAlert
           :appearance="isStuck ? 'warning' : 'info'"
-          :message="isStuck
-            ? 'This network is taking longer than usual to provision. If this continues, contact support or delete and recreate it.'
-            : 'Kong is setting up this network. No action is needed on your part.'"
+          data-testid="provisioning-banner"
         >
-          <template #title>
-            {{ isStuck ? 'Taking longer than usual' : 'Provisioning in progress' }}
+          <template #title>{{ isStuck ? 'Taking longer than usual' : 'Kong is setting up this network' }}</template>
+          <template #default>
+            {{ isStuck
+              ? 'This is taking longer than usual. If it continues, contact support or delete and recreate the network.'
+              : 'No action is needed right now. Connectivity and Private DNS become available after the network is ready.' }}
           </template>
         </KAlert>
 
-        <div class="detail-card">
-          <div class="provisioning-row">
-            <span class="provisioning-label">Expected duration</span>
-            <span>45+ minutes</span>
+        <!-- About this network (initializing variant) -->
+        <section class="detail-card about-card" data-testid="about-network">
+          <div class="about-head">
+            <h2 class="section-title">About this network</h2>
+            <span class="about-time">Created: {{ formatDate(network.createdAt) }}</span>
           </div>
-          <div class="provisioning-row">
-            <span class="provisioning-label">Elapsed time</span>
-            <span>{{ formatElapsed(network.createdAt) }}</span>
+          <div class="about-grid">
+            <div class="about-item">
+              <span class="about-label">Network ID</span>
+              <KCopy format="short" :text="network.id" />
+            </div>
+            <div class="about-item">
+              <span class="about-label">Provider network ID</span>
+              <span class="about-value about-muted">Pending</span>
+              <span class="about-sub">Available after the provider network is created</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Provider</span>
+              <span class="about-value">
+                <component :is="providerIcon(network.cloud)" :size="KUI_ICON_SIZE_20" decorative />
+                {{ network.cloud.toUpperCase() }}
+              </span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Region</span>
+              <span class="about-value">
+                <component :is="regionFlag(network.regions[0].region)" :size="KUI_ICON_SIZE_20" decorative />
+                {{ regionName(network.regions[0].region) }}
+              </span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">CIDR</span>
+              <span class="about-value">{{ network.regions[0].cidr }}</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Zones</span>
+              <span class="about-value">{{ zonesLabel }}</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Network status</span>
+              <KBadge :appearance="networkStatusBadge(network.status)">{{ networkStatusText(network.status) }}</KBadge>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Network status last checked</span>
+              <span class="about-value">{{ timeAgo(network.lastCheckedAt) }}</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Private connectivity</span>
+              <KBadge appearance="neutral">Not available yet</KBadge>
+              <span class="about-sub">Available after the network is ready</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Private DNS</span>
+              <KBadge appearance="neutral">Not available yet</KBadge>
+              <span class="about-sub">Available after the network is ready</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Used by</span>
+              <span class="about-value">No gateways yet</span>
+              <span class="about-sub">Gateways can attach after setup</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label">Network type</span>
+              <span class="about-value">Dedicated Cloud Gateway</span>
+            </div>
           </div>
-          <div class="provisioning-row">
-            <span class="provisioning-label">Last checked</span>
-            <span>{{ timeAgo(network.lastCheckedAt) }}</span>
-          </div>
-        </div>
+        </section>
 
-        <KAlert
-          appearance="info"
-          message="Connectivity is available after this network is ready."
-        />
+        <!-- Provisioning progress -->
+        <section class="detail-card" data-testid="provisioning-progress">
+          <div class="section-header-text">
+            <h3 class="numbered-title">Provisioning progress</h3>
+            <p class="section-help">Network setup can take 45+ minutes. Kong checks status periodically.</p>
+          </div>
+          <div class="prov-layout">
+            <ol class="prov-steps">
+              <li
+                v-for="s in provisioningSteps"
+                :key="s.key"
+                class="prov-step"
+                :class="`prov-step--${s.state}`"
+              >
+                <span class="prov-marker">
+                  <CheckIcon v-if="s.state === 'done'" :size="KUI_ICON_SIZE_20" decorative />
+                  <ProgressIcon v-else-if="s.state === 'current'" :size="KUI_ICON_SIZE_20" decorative />
+                </span>
+                <div class="prov-step-text">
+                  <span class="prov-step-title">{{ s.title }}</span>
+                  <span class="prov-step-desc">{{ s.desc }}</span>
+                </div>
+              </li>
+            </ol>
+            <aside class="prov-stats">
+              <div class="prov-stat">
+                <span class="prov-stat-label">Expected duration</span>
+                <span class="prov-stat-value">45+ minutes</span>
+              </div>
+              <div class="prov-stat">
+                <span class="prov-stat-label">Elapsed time</span>
+                <span class="prov-stat-value">{{ formatElapsed(network.createdAt) }}</span>
+              </div>
+              <div class="prov-stat">
+                <span class="prov-stat-label">Network status last checked</span>
+                <span class="prov-stat-value">{{ timeAgo(network.lastCheckedAt) }}</span>
+              </div>
+              <div class="prov-stat">
+                <span class="prov-stat-label">Current status</span>
+                <KBadge :appearance="networkStatusBadge(network.status)">{{ networkStatusText(network.status) }}</KBadge>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- Capabilities unavailable until ready -->
+        <div class="prov-caps">
+          <section
+            v-for="cap in provCaps"
+            :key="cap.key"
+            class="detail-card cap-card"
+          >
+            <div class="cap-head">
+              <span class="cap-icon"><component :is="cap.icon" :size="KUI_ICON_SIZE_30" decorative /></span>
+              <KBadge appearance="neutral">Unavailable</KBadge>
+            </div>
+            <h4 class="cap-title">{{ cap.title }}</h4>
+            <p class="cap-desc">{{ cap.desc }}</p>
+          </section>
+        </div>
 
         <div v-if="isStuck" class="stuck-actions">
           <KButton appearance="primary" @click="handleContactSupport">Contact support</KButton>
@@ -636,6 +747,8 @@ import {
   PlugIcon,
   ListIcon,
   RuntimesIcon,
+  CheckIcon,
+  ProgressIcon,
   AwsIcon,
   GoogleCloudIcon,
   AzureIcon,
@@ -840,6 +953,20 @@ const isStuck = computed(() => {
   return elapsedMs / 60000 > 90
 })
 
+// Linear provisioning tracker for the initializing state (system-driven, no user action).
+type ProvState = 'done' | 'current' | 'pending'
+const provisioningSteps: { key: string; title: string; desc: string; state: ProvState }[] = [
+  { key: 'created', title: 'Network record created', desc: 'Konnect created the network object and saved the selected CIDR, provider, region, and zones.', state: 'done' },
+  { key: 'provider', title: 'Setting up provider network', desc: 'Kong is provisioning the provider-side network resources. No customer action is needed.', state: 'current' },
+  { key: 'zones', title: 'Preparing zone placement', desc: 'Data plane placement is prepared across the selected zones.', state: 'pending' },
+  { key: 'ready', title: 'Network ready', desc: 'Connectivity, Private DNS, and Test endpoint become available after this step.', state: 'pending' },
+]
+const provCaps = [
+  { key: 'conn', icon: ConnectionsIcon, title: 'Private connectivity', desc: 'Add Resource Endpoint, VPC peering, or Transit Gateway once this network is ready.' },
+  { key: 'dns', icon: WorldPrivateIcon, title: 'Private DNS', desc: 'Configure DNS once the network is ready and private hostname resolution is needed.' },
+  { key: 'test', icon: PlugIcon, title: 'Test endpoint', desc: 'Run endpoint tests once connectivity or DNS is configured.' },
+]
+
 const dnsList = computed(() => network.value?.dnsConfigs ?? [])
 
 // Overview summaries — status-at-a-glance for the two capability tabs.
@@ -883,7 +1010,7 @@ function networkStatusBadge(status: NetworkStatus): string {
 
 function networkStatusText(status: NetworkStatus): string {
   if (status === 'ready') return 'Ready'
-  if (status === 'initialising') return 'Creating'
+  if (status === 'initialising') return 'Initializing'
   if (status === 'error') return 'Error'
   if (status === 'terminating') return 'Deleting'
   return status
@@ -987,26 +1114,166 @@ const handleContactSupport = () => {
   padding: $kui-space-70;
 }
 
-.provisioning-panel {
+// ── Initializing / provisioning view ─────────────────────────────────────────
+.provisioning-view {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
 }
 
-.provisioning-row {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-60;
-  padding: $kui-space-40 $kui-space-0;
+.about-muted { color: $kui-color-text-neutral; }
 
-  &:not(:last-child) {
-    border-bottom: $kui-border-width-10 solid $kui-color-border;
+.about-sub {
+  color: $kui-color-text-neutral-weak;
+  font-size: $kui-font-size-20;
+}
+
+.prov-layout {
+  align-items: start;
+  display: grid;
+  gap: $kui-space-80;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.prov-steps {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: $kui-space-0;
+  padding: $kui-space-0;
+}
+
+.prov-step {
+  display: flex;
+  gap: $kui-space-50;
+  padding-bottom: $kui-space-70;
+  position: relative;
+
+  &:not(:last-child)::before {
+    background-color: $kui-color-border;
+    bottom: 0;
+    content: "";
+    inset-block-start: 24px;
+    inset-inline-start: 11px;
+    position: absolute;
+    width: $kui-border-width-20;
   }
 
-  .provisioning-label {
+  &--done:not(:last-child)::before { background-color: $kui-color-background-primary; }
+}
+
+.prov-marker {
+  align-items: center;
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-circle;
+  color: $kui-color-text-neutral;
+  display: flex;
+  flex: 0 0 auto;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+  z-index: 1;
+
+  .prov-step--done & {
+    background-color: $kui-color-background-primary;
+    border-color: $kui-color-background-primary;
+    color: $kui-color-text-inverse;
+  }
+
+  .prov-step--current & {
+    background-color: $kui-color-background-primary-weakest;
+    border-color: $kui-color-border-primary;
+    color: $kui-color-text-primary;
+  }
+}
+
+.prov-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-20;
+}
+
+.prov-step-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-40;
+  font-weight: $kui-font-weight-semibold;
+}
+
+.prov-step-desc {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
+}
+
+.prov-step--pending .prov-step-title { color: $kui-color-text-neutral; }
+
+.prov-stats {
+  background-color: $kui-color-background-neutral-weakest;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-50;
+  padding: $kui-space-70;
+}
+
+.prov-stat {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-40;
+  justify-content: space-between;
+
+  .prov-stat-label { color: $kui-color-text-neutral; font-size: $kui-font-size-30; }
+  .prov-stat-value { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; }
+}
+
+.prov-caps {
+  display: grid;
+  gap: $kui-space-70;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cap-card {
+  gap: $kui-space-40;
+
+  .cap-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .cap-icon {
+    align-items: center;
+    background-color: $kui-color-background-neutral-weakest;
+    border-radius: $kui-border-radius-30;
     color: $kui-color-text-neutral;
+    display: flex;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+  }
+
+  .cap-title {
+    color: $kui-color-text;
+    font-size: $kui-font-size-40;
     font-weight: $kui-font-weight-semibold;
-    min-width: 160px;
+    margin: $kui-space-0;
+  }
+
+  .cap-desc {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-30;
+    line-height: $kui-line-height-40;
+    margin: $kui-space-0;
   }
 }
 
