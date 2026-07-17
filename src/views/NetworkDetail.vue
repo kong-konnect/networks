@@ -433,12 +433,6 @@
             <p class="section-help">Private connectivity resources attached to this network.</p>
           </div>
           <div class="section-header-actions">
-            <KSegmentedControl
-              v-if="connections.length"
-              v-model="connectivityView"
-              :options="connectivityViewOptions"
-              data-testid="connectivity-view-toggle"
-            />
             <KButton appearance="primary" @click="goToAddConnection">
               <AddCircleIcon decorative />
               Add connection
@@ -455,9 +449,8 @@
           @click-action="goToAddConnection"
         />
 
-        <!-- Table view -->
         <div
-          v-else-if="connectivityView === 'table'"
+          v-else
           class="detail-card table-card"
         >
           <EntityBaseTable
@@ -481,141 +474,6 @@
               <a class="row-action" href="#" @click.prevent="goToConnection(row.id)">View</a>
             </template>
           </EntityBaseTable>
-        </div>
-
-        <!-- Stack view — network at the center, its connectivity resources radiating from it -->
-        <div
-          v-else
-          class="conn-stack"
-          data-testid="connectivity-stack"
-        >
-          <!-- Health rollup -->
-          <div v-if="connectivityAttention.count" class="attention-strip attention-strip--flat">
-            <KBadge appearance="warning">Needs attention</KBadge>
-            <span class="attention-text">{{ connectivityAttention.label }}</span>
-          </div>
-
-          <!-- Center: the network everything attaches to -->
-          <div class="detail-card stack-network-card">
-            <span class="stack-network-eyebrow">Network</span>
-            <span class="stack-network-name">{{ network.name }}</span>
-            <span class="stack-network-meta">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }} · {{ network.regions[0].cidr }}</span>
-            <div class="stack-network-status">
-              <KBadge :appearance="networkStatusBadge(network.status)">{{ networkStatusText(network.status) }}</KBadge>
-              <span class="stack-network-zones">{{ zonesLabel }}</span>
-            </div>
-          </div>
-          <div class="stack-connector" />
-
-          <span class="stack-band-label">Private connectivity resources</span>
-          <div class="stack-cards">
-            <button
-              v-for="conn in connections"
-              :key="conn.id"
-              type="button"
-              class="detail-card stack-conn-card"
-              :class="{ 'stack-conn-card--attention': connectionNextAction(conn) }"
-              :data-testid="`stack-conn-${conn.id}`"
-              @click="goToConnection(conn.id)"
-            >
-              <div class="stack-conn-head">
-                <span class="stack-conn-type">{{ connectionTypeLabel(conn.type) }}</span>
-                <KBadge :appearance="statusBadgeAppearance(conn.status)">{{ statusLabel(conn.status) }}</KBadge>
-              </div>
-              <span class="stack-conn-name">{{ conn.name }}</span>
-              <dl class="stack-conn-details">
-                <template v-for="d in connectionDetails(conn)" :key="d.label">
-                  <dt>{{ d.label }}</dt>
-                  <dd>{{ d.value }}</dd>
-                </template>
-                <template v-if="connectionNextAction(conn)">
-                  <dt>Next action</dt>
-                  <dd class="stack-conn-next">{{ connectionNextAction(conn) }}</dd>
-                </template>
-              </dl>
-              <div class="stack-conn-foot">
-                <span class="stack-conn-owner" :class="{ 'stack-conn-owner--you': connectionNextAction(conn) }">
-                  {{ connectionNextAction(conn) ? 'Waiting on you' : 'Managed by Kong' }}
-                </span>
-                <span class="stack-conn-cta">{{ connectionNextAction(conn) ? 'View action' : 'View' }}</span>
-              </div>
-            </button>
-          </div>
-
-          <div class="stack-connector" />
-          <span class="stack-band-label">Name resolution and gateway access</span>
-
-          <!-- Lower layers: how names resolve, and what can reach the network -->
-          <div class="stack-lower">
-            <div class="detail-card stack-lower-card" data-testid="stack-dns">
-              <div class="stack-lower-head">
-                <h3 class="stack-lower-title">Private DNS</h3>
-                <KBadge v-if="dnsAttention.count" appearance="warning">Needs attention</KBadge>
-                <KBadge v-else-if="dnsList.length" appearance="success">Ready</KBadge>
-              </div>
-              <p class="section-help">Name resolution for services reached through this network.</p>
-              <ul v-if="dnsList.length" class="stack-res-list">
-                <li
-                  v-for="dns in dnsList"
-                  :key="dns.id"
-                  class="stack-res-row"
-                  @click="goToDns(dns.id)"
-                >
-                  <span class="stack-res-main">
-                    <a class="row-link" href="#" @click.prevent.stop="goToDns(dns.id)">{{ dns.name }}</a>
-                    <span class="stack-res-sub">{{ dnsTypeLabel(dns.type) }}<template v-if="dns.lastCheckedAt"> · checked {{ timeAgo(dns.lastCheckedAt) }}</template></span>
-                  </span>
-                  <KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge>
-                </li>
-              </ul>
-              <p v-else class="section-help stack-res-empty">No private DNS configured on this network.</p>
-            </div>
-
-            <div class="detail-card stack-lower-card" data-testid="stack-gateway-access">
-              <div class="stack-lower-head">
-                <h3 class="stack-lower-title">Gateway access</h3>
-              </div>
-              <p class="section-help">What can reach this network, and how to verify it.</p>
-              <ul class="stack-res-list">
-                <li
-                  v-for="gw in usedByRows"
-                  :key="gw.id"
-                  class="stack-res-row"
-                  @click="goToGateway(gw)"
-                >
-                  <span class="stack-res-main">
-                    <a class="row-link" href="#" @click.prevent.stop="goToGateway(gw)">{{ gw.name }}</a>
-                    <span class="stack-res-sub">{{ gw.type }} · {{ gw.dataPlaneGroup }}</span>
-                  </span>
-                  <KBadge appearance="success">Ready</KBadge>
-                </li>
-                <li
-                  class="stack-res-row"
-                  @click="router.push({ name: 'networks-test-endpoint', params: { id: network.id } })"
-                >
-                  <span class="stack-res-main">
-                    <a class="row-link" href="#" @click.prevent.stop="router.push({ name: 'networks-test-endpoint', params: { id: network.id } })">Test endpoint</a>
-                    <span class="stack-res-sub">Validate reachability through this network.</span>
-                  </span>
-                  <KButton
-                    appearance="tertiary"
-                    size="small"
-                    @click.stop="router.push({ name: 'networks-test-endpoint', params: { id: network.id } })"
-                  >
-                    Open
-                  </KButton>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Legend — dot semantics + the last-checked caveat -->
-          <div class="stack-legend">
-            <span class="legend-item"><span class="legend-dot legend-dot--ready" />Ready</span>
-            <span class="legend-item"><span class="legend-dot legend-dot--pending" />Pending customer or system action</span>
-            <span class="legend-item"><span class="legend-dot legend-dot--error" />Error</span>
-            <span class="legend-note">Network status is checked separately from each connectivity resource.</span>
-          </div>
         </div>
       </div>
 
@@ -818,7 +676,6 @@ import {
   KInput,
   KLabel,
   KSelect,
-  KSegmentedControl,
   KTooltip,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
@@ -918,30 +775,6 @@ const goToGateway = (_gw: { id: string }) => {
 
 // Resource-specific facts to surface in the connectivity stack view — only the
 // values the customer actually gave us (ARNs, VPC ids, etc.), per connection type.
-const connectionDetails = (conn: import('@/types').Connection): { label: string; value: string }[] => {
-  const rows: { label: string; value: string }[] = []
-  if (conn.peerAccountId) rows.push({ label: 'Customer account', value: conn.peerAccountId })
-  if (conn.peerVpcId) rows.push({ label: 'Customer VPC', value: conn.peerVpcId })
-  if (conn.peerRegion) rows.push({ label: 'Customer region', value: conn.peerRegion })
-  if (conn.kongEndpointId) rows.push({ label: 'Kong endpoint ID', value: conn.kongEndpointId })
-  if (conn.setupValues?.ramShareArn) rows.push({ label: 'RAM share ARN', value: conn.setupValues.ramShareArn })
-  if (conn.setupValues?.resourceConfigArn) rows.push({ label: 'Resource configuration ARN', value: conn.setupValues.resourceConfigArn })
-  if (conn.setupValues?.pscServiceAttachmentUri) rows.push({ label: 'Service attachment', value: conn.setupValues.pscServiceAttachmentUri })
-  return rows
-}
-
-// When a connection is waiting on the customer, surface the concrete next action
-// (ties to the Kong-vs-you ownership shown during network initialization).
-const connectionNextAction = (conn: import('@/types').Connection): string | null => {
-  if (conn.status === 'pending-user-action' || conn.status === 'pending-acceptance') {
-    if (conn.family === 'private-endpoint' && conn.direction === 'ingress') {
-      return `Accept share in ${conn.cloud.toUpperCase()}`
-    }
-    return 'Complete setup in your cloud account'
-  }
-  return null
-}
-
 // Next steps are conditional — a capability card is only shown while it's unconfigured.
 type NextStep = { key: string; title: string; desc: string; icon: Component; tone: 'purple' | 'teal' | 'pink'; handler: () => void }
 const nextSteps = computed<NextStep[]>(() => {
@@ -1001,13 +834,6 @@ const connectionHeaders = [
   { label: 'Last checked', key: 'lastChecked', sortable: false },
   { label: 'Action', key: 'actions', sortable: false },
 ]
-
-const connectivityView = ref<'table' | 'stack'>('table')
-const connectivityViewOptions = [
-  { label: 'Table', value: 'table' },
-  { label: 'Stack', value: 'stack' },
-]
-
 
 // Provisioning checklist for the initializing state. Each step is owned by either
 // Kong (system-driven) or you (an action on the customer's cloud account), so it's
@@ -1930,260 +1756,4 @@ const confirmDelete = () => {
   gap: $kui-space-50;
 }
 
-// ── Connectivity stack view ───────────────────────────────────────────────────
-.conn-stack {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-0;
-
-  .attention-strip--flat {
-    margin-bottom: $kui-space-70;
-    width: 100%;
-  }
-}
-
-// The network is the anchor — emphasized and centered; resources radiate from it.
-.stack-network-card {
-  align-items: center;
-  background-color: $kui-color-background-primary-weakest;
-  border-color: $kui-color-border-primary;
-  gap: $kui-space-20;
-  max-width: 380px;
-  text-align: center;
-  width: 100%;
-}
-
-.stack-network-eyebrow {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-20;
-  font-weight: $kui-font-weight-semibold;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.stack-network-name {
-  color: $kui-color-text;
-  font-size: $kui-font-size-50;
-  font-weight: $kui-font-weight-bold;
-}
-
-.stack-network-meta {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-30;
-}
-
-.stack-network-status {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-40;
-  margin-top: $kui-space-20;
-
-  .stack-network-zones {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
-  }
-}
-
-.stack-connector {
-  background-color: $kui-color-border;
-  height: $kui-space-70;
-  width: $kui-border-width-20;
-}
-
-.stack-band-label {
-  background-color: $kui-color-background;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-round;
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-30;
-  font-weight: $kui-font-weight-semibold;
-  margin-bottom: $kui-space-60;
-  padding: $kui-space-30 $kui-space-60;
-}
-
-.stack-cards {
-  display: grid;
-  gap: $kui-space-50;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  width: 100%;
-}
-
-.stack-conn-card {
-  cursor: pointer;
-  gap: $kui-space-40;
-  text-align: left;
-  transition: border-color 0.15s ease-in, box-shadow 0.15s ease-in;
-
-  &:hover {
-    border-color: $kui-color-border-primary;
-    box-shadow: $kui-shadow;
-  }
-
-  &--attention {
-    box-shadow: inset $kui-space-20 0 0 0 $kui-color-background-warning;
-  }
-}
-
-.stack-conn-head {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-40;
-  justify-content: space-between;
-}
-
-.stack-conn-type {
-  color: $kui-color-text;
-  font-size: $kui-font-size-40;
-  font-weight: $kui-font-weight-semibold;
-}
-
-.stack-conn-name {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-30;
-}
-
-.stack-conn-details {
-  display: grid;
-  gap: $kui-space-20 $kui-space-40;
-  grid-template-columns: auto 1fr;
-  margin: $kui-space-0;
-
-  dt {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
-  }
-
-  dd {
-    color: $kui-color-text;
-    font-family: $kui-font-family-code;
-    font-size: $kui-font-size-20;
-    margin: $kui-space-0;
-    overflow-wrap: anywhere;
-
-    &.stack-conn-next {
-      color: $kui-color-text-warning-strong;
-      font-family: inherit;
-      font-weight: $kui-font-weight-semibold;
-    }
-  }
-}
-
-.stack-conn-foot {
-  align-items: center;
-  border-top: $kui-border-width-10 solid $kui-color-border;
-  display: flex;
-  justify-content: space-between;
-  padding-top: $kui-space-40;
-}
-
-.stack-conn-owner {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-20;
-
-  &--you { color: $kui-color-text-warning-strong; font-weight: $kui-font-weight-semibold; }
-}
-
-.stack-conn-cta {
-  color: $kui-color-text-primary;
-  font-size: $kui-font-size-30;
-  font-weight: $kui-font-weight-semibold;
-}
-
-.stack-lower {
-  display: grid;
-  gap: $kui-space-50;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: 100%;
-
-  @media (max-width: 760px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.stack-lower-card {
-  gap: $kui-space-40;
-}
-
-.stack-lower-head {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-40;
-}
-
-.stack-lower-title {
-  color: $kui-color-text;
-  font-size: $kui-font-size-40;
-  font-weight: $kui-font-weight-semibold;
-  margin: $kui-space-0;
-}
-
-.stack-res-list {
-  display: flex;
-  flex-direction: column;
-  list-style: none;
-  margin: $kui-space-0;
-  padding: $kui-space-0;
-}
-
-.stack-res-row {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  gap: $kui-space-50;
-  justify-content: space-between;
-  padding: $kui-space-40 $kui-space-0;
-
-  &:not(:last-child) {
-    border-bottom: $kui-border-width-10 solid $kui-color-border;
-  }
-
-  &:hover .row-link { text-decoration: underline; }
-}
-
-.stack-res-main {
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-10;
-  min-width: 0;
-}
-
-.stack-res-sub {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-20;
-}
-
-.stack-res-empty {
-  padding: $kui-space-40 $kui-space-0;
-}
-
-.stack-legend {
-  align-items: center;
-  color: $kui-color-text-neutral;
-  column-gap: $kui-space-70;
-  display: flex;
-  flex-wrap: wrap;
-  font-size: $kui-font-size-20;
-  margin-top: $kui-space-70;
-  row-gap: $kui-space-20;
-  width: 100%;
-
-  .legend-item {
-    align-items: center;
-    display: flex;
-    gap: $kui-space-30;
-  }
-
-  .legend-dot {
-    border-radius: $kui-border-radius-circle;
-    height: $kui-space-40;
-    width: $kui-space-40;
-
-    &--ready { background-color: $kui-color-background-success; }
-    &--pending { background-color: $kui-color-background-warning; }
-    &--error { background-color: $kui-color-background-danger; }
-  }
-
-  .legend-note { color: $kui-color-text-neutral-weak; }
-}
 </style>
