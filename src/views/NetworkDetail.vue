@@ -203,87 +203,76 @@
           </div>
         </section>
 
-        <!-- Section 2 — Private connectivity (entry list) -->
-        <section class="detail-card" data-testid="connectivity-summary">
-          <div class="section-header">
+        <!-- Section 2 — Private connectivity + Private DNS (50/50) -->
+        <div class="overview-cols">
+          <section class="detail-card" data-testid="connectivity-summary">
             <div class="section-header-text">
               <h3 class="numbered-title">Private connectivity</h3>
               <p class="section-help">{{ connections.length }} connection{{ connections.length === 1 ? '' : 's' }} on this network.</p>
             </div>
-            <a
-              v-if="connections.length"
-              class="row-action"
-              href="#"
-              @click.prevent="viewTab('#connectivity')"
-            >View all</a>
-          </div>
-          <table v-if="connections.length" class="rows-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="conn in connections"
-                :key="conn.id"
-                class="clickable-row"
-                @click="goToConnection(conn.id)"
-              >
-                <td class="conn-name">{{ conn.name }}</td>
-                <td>{{ connectionTypeLabel(conn.type) }}</td>
-                <td><KBadge :appearance="statusBadgeAppearance(conn.status)">{{ statusLabel(conn.status) }}</KBadge></td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-else class="mini-empty">
-            <p class="section-help">No private connectivity configured.</p>
-            <a class="row-action" href="#" @click.prevent="goToAddConnection">Add connection</a>
-          </div>
-        </section>
+            <table v-if="connections.length" class="rows-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="conn in connections"
+                  :key="conn.id"
+                  class="clickable-row"
+                  @click="goToConnection(conn.id)"
+                >
+                  <td>
+                    <a class="row-link" href="#" @click.prevent.stop="goToConnection(conn.id)">{{ conn.name }}</a>
+                  </td>
+                  <td>{{ connectionTypeLabel(conn.type) }}</td>
+                  <td><KBadge :appearance="statusBadgeAppearance(conn.status)">{{ statusLabel(conn.status) }}</KBadge></td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="mini-empty">
+              <p class="section-help">No private connectivity configured.</p>
+              <a class="row-action" href="#" @click.prevent="goToAddConnection">Add connection</a>
+            </div>
+          </section>
 
-        <!-- Section 2b — Private DNS (entry list) -->
-        <section class="detail-card" data-testid="dns-summary">
-          <div class="section-header">
+          <section class="detail-card" data-testid="dns-summary">
             <div class="section-header-text">
               <h3 class="numbered-title">Private DNS</h3>
               <p class="section-help">{{ dnsList.length }} configuration{{ dnsList.length === 1 ? '' : 's' }} on this network.</p>
             </div>
-            <a
-              v-if="dnsList.length"
-              class="row-action"
-              href="#"
-              @click.prevent="viewTab('#dns')"
-            >View all</a>
-          </div>
-          <table v-if="dnsList.length" class="rows-table">
-            <thead>
-              <tr>
-                <th>Domain</th>
-                <th>Type</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="dns in dnsList"
-                :key="dns.id"
-                class="clickable-row"
-                @click="goToDns(dns.id)"
-              >
-                <td class="conn-name">{{ dns.name }}</td>
-                <td>{{ dnsTypeLabel(dns.type) }}</td>
-                <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-else class="mini-empty">
-            <p class="section-help">No private DNS configured.</p>
-            <a class="row-action" href="#" @click.prevent="openAddDns">Add private DNS</a>
-          </div>
-        </section>
+            <table v-if="dnsList.length" class="rows-table">
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="dns in dnsList"
+                  :key="dns.id"
+                  class="clickable-row"
+                  @click="goToDns(dns.id)"
+                >
+                  <td>
+                    <a class="row-link" href="#" @click.prevent.stop="goToDns(dns.id)">{{ dns.name }}</a>
+                  </td>
+                  <td>{{ dnsTypeLabel(dns.type) }}</td>
+                  <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="mini-empty">
+              <p class="section-help">No private DNS configured.</p>
+              <a class="row-action" href="#" @click.prevent="openAddDns">Add private DNS</a>
+            </div>
+          </section>
+        </div>
 
         <!-- Section 3 — Used by -->
         <section class="detail-card" data-testid="used-by">
@@ -299,17 +288,22 @@
                 <th>Control plane ID</th>
                 <th>Data plane group</th>
                 <th>Status</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="gw in usedByRows" :key="gw.id">
-                <td class="conn-name">{{ gw.name }}</td>
+              <tr
+                v-for="gw in usedByRows"
+                :key="gw.id"
+                class="clickable-row"
+                @click="goToGateway(gw)"
+              >
+                <td>
+                  <a class="row-link" href="#" @click.prevent.stop="goToGateway(gw)">{{ gw.name }}</a>
+                </td>
                 <td>{{ gw.type }}</td>
-                <td><KCopy format="short" :text="gw.controlPlaneId" /></td>
-                <td><KCopy format="short" :text="gw.dataPlaneGroup" /></td>
+                <td><KCopy format="short" :text="gw.controlPlaneId" @click.stop /></td>
+                <td><KCopy format="short" :text="gw.dataPlaneGroup" @click.stop /></td>
                 <td><KBadge appearance="success">Ready</KBadge></td>
-                <td><a class="row-action" href="#" @click.prevent="goToGateway(gw)">View gateway</a></td>
               </tr>
             </tbody>
           </table>
@@ -1034,6 +1028,21 @@ const handleContactSupport = () => {
   &--danger { color: $kui-color-text-danger; }
 }
 
+// Entity name link inside a table row (click name or row to navigate — Konnect pattern).
+.row-link {
+  color: $kui-color-text-primary;
+  font-weight: $kui-font-weight-semibold;
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+.detail-card > .section-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-20;
+}
+
 .dns-actions-cell {
   display: flex;
   gap: $kui-space-60;
@@ -1421,26 +1430,31 @@ const handleContactSupport = () => {
 
 .about-head {
   align-items: baseline;
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
   display: flex;
   flex-wrap: wrap;
   gap: $kui-space-40 $kui-space-60;
   justify-content: space-between;
+  padding-bottom: $kui-space-60;
 }
 
 .about-time {
   align-items: center;
   color: $kui-color-text-neutral;
   display: inline-flex;
-  font-size: $kui-font-size-20;
+  font-size: $kui-font-size-30;
   gap: $kui-space-20;
 }
 
-// Clean horizontal fact strip (matches the production "About …" card structure).
+// Clean facts grid (matches the production "Gateway summary / Portal summary" card).
 .about-grid {
-  column-gap: $kui-space-90;
-  display: flex;
-  flex-wrap: wrap;
-  row-gap: $kui-space-60;
+  display: grid;
+  gap: $kui-space-70 $kui-space-90;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  @media (max-width: 1000px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .about-item {

@@ -50,15 +50,6 @@
             <KBadge :appearance="stateBadgeAppearance(row.status)">
               {{ stateLabel(row.status) }}
             </KBadge>
-            <KTooltip
-              v-if="row.attachedGatewayCount === 0"
-              text="This network is not used by any gateways. Delete it to reduce your cost."
-            >
-              <KBadge appearance="warning" data-testid="unused-badge">
-                <WarningIcon :size="KUI_ICON_SIZE_20" decorative />
-                Unused
-              </KBadge>
-            </KTooltip>
           </div>
         </template>
 
@@ -72,7 +63,16 @@
         </template>
 
         <template #cgws="{ row }">
-          {{ row.attachedGatewayCount }}
+          <span
+            v-if="row.attachedGatewayCount === 0"
+            class="cgws-unused"
+          >
+            0
+            <KTooltip text="Not used by any gateways. Delete this network to reduce your cost.">
+              <WarningIcon class="warn-icon" :size="KUI_ICON_SIZE_20" />
+            </KTooltip>
+          </span>
+          <template v-else>{{ row.attachedGatewayCount }}</template>
         </template>
 
         <template #provider="{ row }">
@@ -332,6 +332,17 @@ const confirmDelete = () => {
 .pn-none {
   color: $kui-color-text-neutral-weak;
   font-size: $kui-font-size-30;
+}
+
+.cgws-unused {
+  align-items: center;
+  color: $kui-color-text-warning;
+  display: inline-flex;
+  gap: $kui-space-20;
+
+  .warn-icon {
+    color: $kui-color-text-warning;
+  }
 }
 
 .regions-text {

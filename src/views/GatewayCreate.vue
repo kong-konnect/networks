@@ -1769,43 +1769,50 @@ const finish = (destination: { name: string }) => {
   flex: 0 0 auto;
 }
 
+// Summary rail — matches the metering "Meter Summary" card: white, label-left /
+// value-right rows.
 .review-summary-rail {
-  background-color: $kui-color-background-neutral-weakest;
+  align-self: start;
+  background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
   display: flex;
   flex-direction: column;
-  gap: $kui-space-60;
+  gap: $kui-space-50;
   padding: $kui-space-70;
 }
 
 .summary-list {
   display: flex;
   flex-direction: column;
-  gap: $kui-space-50;
+  gap: $kui-space-10;
   margin: $kui-space-0;
 }
 
 .summary-item {
+  align-items: center;
   display: flex;
-  flex-direction: column;
-  gap: $kui-space-20;
+  gap: $kui-space-60;
+  justify-content: space-between;
+  padding: $kui-space-30 $kui-space-0;
 
   dt {
     color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
-    font-weight: $kui-font-weight-semibold;
+    flex: 0 0 auto;
+    font-size: $kui-font-size-30;
   }
 
   dd {
     color: $kui-color-text;
-    font-size: $kui-font-size-40;
+    font-size: $kui-font-size-30;
     margin: $kui-space-0;
+    text-align: right;
   }
 }
 
 .summary-divider {
   border-top: $kui-border-width-10 solid $kui-color-border;
+  margin: $kui-space-20 $kui-space-0;
 }
 
 .summary-item .cell-icon {

@@ -74,15 +74,16 @@ const stepState = (i: number) =>
   white-space: nowrap;
 }
 
-// Completed + active: filled primary circle
+// Completed + active: filled primary circle (progressed path shown in brand color)
 .step--completed .step-circle,
 .step--active .step-circle {
   background-color: $kui-color-background-primary;
   color: $kui-color-text-inverse;
 }
 
-.step--completed .step-circle {
-  background-color: $kui-color-background-neutral;
+// Completed labels are muted so the active step reads as "where you are"
+.step--completed .step-label {
+  color: $kui-color-text-neutral;
 }
 
 // Upcoming: outlined neutral circle + muted label
