@@ -63,11 +63,17 @@
           </KButton>
           <KButton
             appearance="primary"
-            :disabled="!controlPlaneName"
+            :disabled="!controlPlaneName || creatingCp"
             data-testid="wizard-continue-button"
             @click="createControlPlane"
           >
-            Create control plane
+            <ProgressIcon
+              v-if="creatingCp"
+              class="btn-spinner"
+              :size="KUI_ICON_SIZE_20"
+              decorative
+            />
+            {{ creatingCp ? 'Creating control plane…' : 'Create control plane' }}
           </KButton>
         </footer>
       </div>
@@ -151,7 +157,7 @@
               data-testid="wizard-next-button"
               @click="onTypeNext"
             >
-              Save and next
+              Save and configure
             </KButton>
           </div>
         </footer>
@@ -566,7 +572,7 @@
               data-testid="wizard-review-button"
               @click="step = 3"
             >
-              Create data plane nodes
+              Review configurations
             </KButton>
           </div>
         </footer>
@@ -589,19 +595,20 @@
             <aside class="review-summary-rail" data-testid="review-summary">
               <h3 class="numbered-title">Summary</h3>
               <dl class="summary-list">
-                <div class="summary-item">
-                  <dt>Gateway version</dt>
-                  <dd>{{ gatewayVersionLabel }}</dd>
-                </div>
-                <div class="summary-item">
-                  <dt>API access</dt>
-                  <dd>{{ apiAccessLabel }}</dd>
+                <div class="summary-config-group">
+                  <div class="summary-item">
+                    <dt>Gateway version</dt>
+                    <dd>{{ gatewayVersionLabel }}</dd>
+                  </div>
+                  <div class="summary-item">
+                    <dt>API access</dt>
+                    <dd>{{ apiAccessLabel }}</dd>
+                  </div>
                 </div>
                 <template
                   v-for="(deployment, di) in deployments"
                   :key="di"
                 >
-                  <div class="summary-divider" />
                   <div class="summary-item">
                     <dt>Provider</dt>
                     <dd>
@@ -644,26 +651,24 @@
               </dl>
             </aside>
 
-            <!-- Configuration as code -->
-            <section class="review-config">
-              <div class="review-config-head">
-                <h3 class="numbered-title">Data plane configuration</h3>
-                <div class="config-lang">
-                  <KSelect
-                    v-model="codeLang"
-                    :items="codeLangOptions"
-                    appearance="select"
-                    :width="'150px'"
-                    data-testid="config-lang-toggle"
-                  />
-                </div>
+            <!-- Configuration as code — gray block with the heading + selector in its own bar -->
+            <section class="config-block">
+              <div class="config-block-bar">
+                <h3 class="config-block-title">Data plane configuration</h3>
+                <KSelect
+                  v-model="codeLang"
+                  :items="codeLangOptions"
+                  appearance="select"
+                  :width="'150px'"
+                  data-testid="config-lang-toggle"
+                />
               </div>
               <KCodeBlock
                 id="gateway-config-preview"
                 class="config-code-block"
                 :code="previewCode"
                 :language="previewLanguage"
-                theme="dark"
+                theme="light"
                 data-testid="config-code-block"
               />
             </section>
@@ -691,7 +696,7 @@
               data-testid="runtimes-save-button"
               @click="finish({ name: 'gateway-overview' })"
             >
-              Done
+              Create data plane node
             </KButton>
           </div>
         </footer>
@@ -727,9 +732,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ToastManager } from '@kong/kongponents'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30, KUI_ICON_SIZE_40 } from '@kong/design-tokens'
 import {
   AddIcon,
@@ -1206,16 +1212,27 @@ const handleCancel = () => {
 // Control plane is created at step 1 (matches production: the CP exists before any data
 // plane is configured). Persist a CP-only config so its overview can offer "Configure
 // data plane" if the user stops here.
+const toaster = new ToastManager()
+onBeforeUnmount(() => toaster.destroy())
+
+const creatingCp = ref(false)
 const createControlPlane = () => {
-  store.setGatewayConfig({
-    name: controlPlaneName.value,
-    dataPlaneType: '',
-    gatewayVersion: '',
-    apiAccess: '',
-    envVars: [],
-    deployments: [],
-  })
-  step.value = 1
+  if (creatingCp.value) return
+  creatingCp.value = true
+  // Brief loader on the button, then the CP exists → advance + confirm with a toast.
+  setTimeout(() => {
+    store.setGatewayConfig({
+      name: controlPlaneName.value,
+      dataPlaneType: '',
+      gatewayVersion: '',
+      apiAccess: '',
+      envVars: [],
+      deployments: [],
+    })
+    creatingCp.value = false
+    step.value = 1
+    toaster.open({ appearance: 'success', message: 'Control plane created.' })
+  }, 700)
 }
 
 // After the CP exists, leaving the flow lands on the control-plane overview (not the
@@ -1759,22 +1776,32 @@ const finish = (destination: { name: string }) => {
   }
 }
 
-.review-config {
-  background-color: $kui-color-background;
+// Configuration block: one gray container, heading + selector in its own top bar,
+// code flush below (no separate white card).
+.config-block {
+  background-color: $kui-color-background-neutral-weakest;
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
   display: flex;
   flex-direction: column;
-  gap: $kui-space-50;
   min-width: 0;
-  padding: $kui-space-70;
+  overflow: hidden;
 }
 
-.review-config-head {
+.config-block-bar {
   align-items: center;
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
   display: flex;
   gap: $kui-space-60;
   justify-content: space-between;
+  padding: $kui-space-40 $kui-space-50;
+}
+
+.config-block-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-40;
+  font-weight: $kui-font-weight-semibold;
+  margin: $kui-space-0;
 }
 
 // Keep the format toggle at its natural width (never stretched full-bleed).
@@ -1825,6 +1852,23 @@ const finish = (destination: { name: string }) => {
 .summary-divider {
   border-top: $kui-border-width-10 solid $kui-color-border;
   margin: $kui-space-20 $kui-space-0;
+}
+
+// Gateway-wide config (version + access) grouped on a subtle grey background.
+.summary-config-group {
+  background-color: $kui-color-background-neutral-weakest;
+  border-radius: $kui-border-radius-30;
+  display: flex;
+  flex-direction: column;
+  padding: $kui-space-20 $kui-space-50;
+}
+
+.btn-spinner {
+  animation: btn-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
 }
 
 .summary-item .cell-icon {
