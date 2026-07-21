@@ -590,112 +590,121 @@
             <p class="section-help">Here's everything you created and the configuration that was applied.</p>
           </div>
 
-          <div class="review-layout">
-            <!-- Rail: summary of what was created -->
-            <aside class="review-summary-rail" data-testid="review-summary">
-              <h3 class="numbered-title">Summary</h3>
-              <dl class="summary-list">
-                <div class="summary-config-group">
-                  <div class="summary-item">
-                    <dt>Gateway version</dt>
-                    <dd>{{ gatewayVersionLabel }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>API access</dt>
-                    <dd>{{ apiAccessLabel }}</dd>
-                  </div>
-                </div>
-                <template
-                  v-for="(deployment, di) in deployments"
-                  :key="di"
-                >
-                  <div class="summary-item">
-                    <dt>Provider</dt>
-                    <dd>
-                      <span class="cell-icon">
-                        <component :is="providerIcon(deployment.provider)" :size="KUI_ICON_SIZE_20" decorative />
-                        {{ providerLabel(deployment.provider) }}
-                      </span>
-                    </dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Region</dt>
-                    <dd>
-                      <span class="cell-icon">
-                        <component :is="regionFlag(deployment.region)" :size="KUI_ICON_SIZE_20" decorative />
-                        {{ regionLabel(deployment.region) }}
-                      </span>
-                    </dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Network</dt>
-                    <dd>{{ deploymentNetwork(deployment).name || '—' }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>CIDR</dt>
-                    <dd>{{ deploymentNetwork(deployment).cidr || '—' }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Zones</dt>
-                    <dd>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Network status</dt>
-                    <dd>
-                      <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
-                        {{ networkStatusText(deploymentNetwork(deployment).status) }}
-                      </KBadge>
-                    </dd>
-                  </div>
-                </template>
-              </dl>
-            </aside>
-
-            <!-- Configuration as code — gray block with the heading + selector in its own bar -->
-            <section class="config-block">
-              <div class="config-block-bar">
-                <h3 class="config-block-title">Data plane configuration</h3>
-                <KSelect
-                  v-model="codeLang"
-                  :items="codeLangOptions"
-                  appearance="select"
-                  :width="'150px'"
-                  data-testid="config-lang-toggle"
-                />
-              </div>
-              <p class="config-block-desc">
-                A read-only preview of this data plane node's configuration. Provision it from the API, Terraform, or curl instead of the UI, or save it to your pipeline.
-                <a
-                  class="config-docs-link"
-                  href="https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  View documentation
-                  <ExternalLinkIcon :size="KUI_ICON_SIZE_20" decorative />
-                </a>
-              </p>
-              <KCodeBlock
-                id="gateway-config-preview"
-                class="config-code-block"
-                :code="previewCode"
-                :language="previewLanguage"
-                theme="light"
-                data-testid="config-code-block"
+          <!-- One view, two lenses: Preview (structured) and Raw (code). No side-by-side. -->
+          <section class="review-config" data-testid="review-config">
+            <div class="review-config-bar">
+              <KSegmentedControl
+                v-model="reviewView"
+                :options="reviewViewOptions"
+                data-testid="review-view-toggle"
               />
-            </section>
-          </div>
+              <KSelect
+                v-if="reviewView === 'raw'"
+                v-model="codeLang"
+                :items="codeLangOptions"
+                appearance="select"
+                :width="'150px'"
+                data-testid="config-lang-toggle"
+              />
+            </div>
+            <p class="config-block-desc">
+              {{ reviewView === 'raw'
+                ? 'A read-only copy of this data plane node\'s configuration. Provision it from the API, Terraform, or curl, or save it to your pipeline.'
+                : 'A read-only summary of the data plane node you\'re about to create. Switch to Raw to get it as API, Terraform, or curl.' }}
+              <a
+                class="config-docs-link"
+                href="https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/"
+                target="_blank"
+                rel="noopener"
+              >
+                View documentation
+                <ExternalLinkIcon :size="KUI_ICON_SIZE_20" decorative />
+              </a>
+            </p>
+
+            <!-- Preview: structured summary -->
+            <dl
+              v-if="reviewView === 'preview'"
+              class="summary-list review-preview"
+              data-testid="review-preview"
+            >
+              <div class="summary-config-group">
+                <div class="summary-item">
+                  <dt>Gateway version</dt>
+                  <dd>{{ gatewayVersionLabel }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>API access</dt>
+                  <dd>{{ apiAccessLabel }}</dd>
+                </div>
+              </div>
+              <template
+                v-for="(deployment, di) in deployments"
+                :key="di"
+              >
+                <div class="summary-item">
+                  <dt>Provider</dt>
+                  <dd>
+                    <span class="cell-icon">
+                      <component :is="providerIcon(deployment.provider)" :size="KUI_ICON_SIZE_20" decorative />
+                      {{ providerLabel(deployment.provider) }}
+                    </span>
+                  </dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Region</dt>
+                  <dd>
+                    <span class="cell-icon">
+                      <component :is="regionFlag(deployment.region)" :size="KUI_ICON_SIZE_20" decorative />
+                      {{ regionLabel(deployment.region) }}
+                    </span>
+                  </dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Network</dt>
+                  <dd>{{ deploymentNetwork(deployment).name || '—' }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>CIDR</dt>
+                  <dd>{{ deploymentNetwork(deployment).cidr || '—' }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Zones</dt>
+                  <dd>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Network status</dt>
+                  <dd>
+                    <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
+                      {{ networkStatusText(deploymentNetwork(deployment).status) }}
+                    </KBadge>
+                  </dd>
+                </div>
+              </template>
+            </dl>
+
+            <!-- Raw: configuration as code -->
+            <KCodeBlock
+              v-else
+              id="gateway-config-preview"
+              class="config-code-block"
+              :code="previewCode"
+              :language="previewLanguage"
+              theme="light"
+              data-testid="config-code-block"
+            />
+          </section>
         </section>
 
         <footer class="step-footer">
-          <KButton
-            appearance="tertiary"
-            data-testid="wizard-back-button"
-            @click="step = 2"
-          >
-            Back
-          </KButton>
-          <div class="step-footer-end">
+          <div class="step-footer-start">
+            <KButton
+              appearance="tertiary"
+              data-testid="wizard-back-button"
+              @click="step = 2"
+            >
+              Back
+            </KButton>
             <KButton
               appearance="tertiary"
               data-testid="wizard-cancel-button"
@@ -703,14 +712,14 @@
             >
               Exit
             </KButton>
-            <KButton
-              appearance="primary"
-              data-testid="runtimes-save-button"
-              @click="finish({ name: 'gateway-overview' })"
-            >
-              Create data plane node
-            </KButton>
           </div>
+          <KButton
+            appearance="primary"
+            data-testid="runtimes-save-button"
+            @click="finish({ name: 'gateway-overview' })"
+          >
+            Create data plane node
+          </KButton>
         </footer>
       </div>
     </div>
@@ -1109,6 +1118,13 @@ const cloudProvidersLabel = computed(() =>
   [...new Set(deployments.map(d => d.provider))].map(p => providerLabel(p)).join(', '))
 
 // ── Config-as-code preview ──────────────────────────────────────────────────────
+// Review shows ONE view with two lenses (no side-by-side): Preview (structured) / Raw (code).
+const reviewView = ref<'preview' | 'raw'>('preview')
+const reviewViewOptions = [
+  { label: 'Preview', value: 'preview' },
+  { label: 'Raw', value: 'raw' },
+]
+
 const codeLang = ref<'terraform' | 'json' | 'curl'>('json')
 const codeLangOptions = [
   { label: 'JSON', value: 'json' },
@@ -1853,6 +1869,29 @@ const finish = (destination: { name: string }) => {
   flex: 0 0 auto;
 }
 
+// Consolidated review: one bordered container, Preview/Raw toggle in its bar.
+.review-config {
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.review-config-bar {
+  align-items: center;
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
+  display: flex;
+  gap: $kui-space-60;
+  justify-content: space-between;
+  padding: $kui-space-50;
+}
+
+.review-preview {
+  padding: $kui-space-70;
+}
+
 // Summary rail — matches the metering "Meter Summary" card: white, label-left /
 // value-right rows.
 .review-summary-rail {
@@ -1980,7 +2019,8 @@ const finish = (destination: { name: string }) => {
   position: sticky;
 }
 
-.step-footer-end {
+.step-footer-end,
+.step-footer-start {
   display: flex;
   gap: $kui-space-40;
 }

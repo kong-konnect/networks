@@ -137,11 +137,12 @@ defineProps<{
   padding: $kui-space-40 $kui-space-50;
   width: 100%;
 
+  // Emphasis only — neutral, NOT the primary/card-selection look (it's a diagram, not a control).
   &.active {
-    background-color: $kui-color-background-primary-weakest;
-    border-color: $kui-color-border-primary;
-    box-shadow: 0 0 0 1px $kui-color-border-primary;
-    color: $kui-color-text-primary;
+    background-color: $kui-color-background-neutral-weakest;
+    border-color: $kui-color-border;
+    color: $kui-color-text;
+    font-weight: $kui-font-weight-semibold;
   }
 }
 
@@ -170,9 +171,8 @@ defineProps<{
   width: 100%;
 
   &.active {
-    border-color: $kui-color-border-primary;
-    border-style: solid;
-    box-shadow: 0 0 0 1px $kui-color-border-primary;
+    background-color: $kui-color-background-neutral-weakest;
+    border-color: $kui-color-border;
   }
 }
 
