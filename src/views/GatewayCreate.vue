@@ -663,6 +663,18 @@
                   data-testid="config-lang-toggle"
                 />
               </div>
+              <p class="config-block-desc">
+                A read-only preview of this data plane node's configuration. Provision it from the API, Terraform, or curl instead of the UI, or save it to your pipeline.
+                <a
+                  class="config-docs-link"
+                  href="https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  View documentation
+                  <ExternalLinkIcon :size="KUI_ICON_SIZE_20" decorative />
+                </a>
+              </p>
               <KCodeBlock
                 id="gateway-config-preview"
                 class="config-code-block"
@@ -1097,10 +1109,11 @@ const cloudProvidersLabel = computed(() =>
   [...new Set(deployments.map(d => d.provider))].map(p => providerLabel(p)).join(', '))
 
 // ── Config-as-code preview ──────────────────────────────────────────────────────
-const codeLang = ref<'terraform' | 'json'>('json')
+const codeLang = ref<'terraform' | 'json' | 'curl'>('json')
 const codeLangOptions = [
   { label: 'JSON', value: 'json' },
   { label: 'Terraform', value: 'terraform' },
+  { label: 'curl', value: 'curl' },
 ]
 
 // Network descriptor for a deployment — the selected network's name/CIDR/status,
@@ -1188,10 +1201,20 @@ const terraformConfig = computed(() => {
   return lines.join('\n')
 })
 
+const curlConfig = computed(() =>
+  `curl -X POST https://us.api.konghq.com/v2/cloud-gateways \\
+  -H "Authorization: Bearer $KONNECT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '${apiConfig.value}'`)
+
 const previewCode = computed(() =>
-  codeLang.value === 'terraform' ? terraformConfig.value : apiConfig.value)
+  codeLang.value === 'terraform' ? terraformConfig.value
+    : codeLang.value === 'curl' ? curlConfig.value
+      : apiConfig.value)
 const previewLanguage = computed(() =>
-  codeLang.value === 'terraform' ? 'hcl' : 'json')
+  codeLang.value === 'terraform' ? 'hcl'
+    : codeLang.value === 'curl' ? 'bash'
+      : 'json')
 
 // ── Review (ConfigCardDisplay) ────────────────────────────────────────────────────
 // Review summary = data plane node configuration only (control-plane details removed).
@@ -1802,6 +1825,27 @@ const finish = (destination: { name: string }) => {
   font-size: $kui-font-size-40;
   font-weight: $kui-font-weight-semibold;
   margin: $kui-space-0;
+}
+
+// Explains what the preview is (read-only) and what you can do with it.
+.config-block-desc {
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
+  margin: $kui-space-0;
+  padding: $kui-space-50;
+
+  .config-docs-link {
+    align-items: center;
+    color: $kui-color-text-primary;
+    display: inline-flex;
+    gap: $kui-space-20;
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover { text-decoration: underline; }
+  }
 }
 
 // Keep the format toggle at its natural width (never stretched full-bleed).
