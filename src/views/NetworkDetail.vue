@@ -159,6 +159,13 @@
             </li>
           </ul>
         </section>
+
+        <!-- Prototype device: skip the 45-min provisioning wait. Intentionally low-prominence. -->
+        <div class="sim-ready">
+          <button type="button" class="sim-ready-btn" data-testid="simulate-ready" @click="simulateReady">
+            Simulate ready
+          </button>
+        </div>
       </div>
 
       <KAlert
@@ -937,6 +944,11 @@ function networkStatusText(status: NetworkStatus): string {
   return status
 }
 
+// Prototype device — flip the initializing network to ready without the wait.
+const simulateReady = () => {
+  if (network.value) store.markNetworkReady(network.value.id)
+}
+
 const goToAddConnection = () => {
   router.push({ name: 'networks-add-connection', params: { id: networkId.value } })
 }
@@ -1024,6 +1036,24 @@ const confirmDelete = () => {
 }
 
 // ── Initializing / provisioning view ─────────────────────────────────────────
+// Prototype-only "Simulate ready" — deliberately understated (small, muted link).
+.sim-ready {
+  display: flex;
+  justify-content: center;
+}
+
+.sim-ready-btn {
+  background: none;
+  border: none;
+  color: $kui-color-text-neutral-weak;
+  cursor: pointer;
+  font-size: $kui-font-size-20;
+  padding: $kui-space-20 $kui-space-40;
+  text-decoration: underline;
+
+  &:hover { color: $kui-color-text-neutral; }
+}
+
 .provisioning-view {
   display: flex;
   flex-direction: column;

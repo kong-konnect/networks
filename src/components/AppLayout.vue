@@ -29,6 +29,9 @@
       </div>
     </main>
   </div>
+
+  <!-- Prototype-only Day 1 / Day n state device (floating tab, top-center) -->
+  <DayModeSwitcher />
 </template>
 
 <script setup lang="ts">
@@ -36,6 +39,7 @@ import Navbar from './Navbar.vue'
 import Sidebar from './Sidebar.vue'
 import LegacyNavbar from './LegacyNavbar.vue'
 import LegacySidebar from './LegacySidebar.vue'
+import DayModeSwitcher from './DayModeSwitcher.vue'
 import { useNavVersion } from '@/composables'
 
 const { isNewNav } = useNavVersion()

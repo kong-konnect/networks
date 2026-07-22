@@ -383,6 +383,12 @@ const connections = ref<Connection[]>(initialConnections)
 const gateways = ref<Gateway[]>(initialGateways)
 const servicePaths = ref<ServicePath[]>(initialServicePaths)
 
+// Prototype-only "Day 1 / Day n" device. Day 1 = start from an empty Networks
+// section and build up (only networks created this session are visible); Day n =
+// the pre-populated mock. Not a product concept.
+const dayMode = ref<'day-1' | 'day-n'>('day-n')
+const sessionCreatedIds = ref<Set<string>>(new Set())
+
 // Configuration captured by the gateway-creation wizard, surfaced on the
 // control-plane overview after creation (so captured config isn't thrown away).
 export interface GatewayConfig {
@@ -435,6 +441,29 @@ export function useNetworksStore() {
       n.status !== 'terminating',
     )
 
+  // Networks visible for the current day-mode. Day 1 shows only networks created
+  // this session (empty until the user creates one); Day n shows the full mock.
+  const getVisibleNetworks = () => {
+    const selectable = getSelectableNetworks()
+    return dayMode.value === 'day-1'
+      ? selectable.filter(n => sessionCreatedIds.value.has(n.id))
+      : selectable
+  }
+
+  const getDayMode = () => dayMode.value
+  const setDayMode = (mode: 'day-1' | 'day-n') => { dayMode.value = mode }
+
+  // Prototype device: skip the 45-min provisioning wait.
+  const markNetworkReady = (id: string) => {
+    const net = networks.value.find(n => n.id === id)
+    if (!net) return
+    net.status = 'ready'
+    net.lastCheckedAt = new Date().toISOString()
+    if (!net.providerNetworkId) {
+      net.providerNetworkId = `vpc-${id.replace(/[^a-z0-9]/gi, '')}${Math.abs(id.length * 7).toString(16)}`
+    }
+  }
+
   const getConnectionById = (id: string) =>
     connections.value.find(c => c.id === id)
 
@@ -457,6 +486,7 @@ export function useNetworksStore() {
       connectionCount: data.queuedConnections?.length ?? 0,
     }
     networks.value.push(newNetwork)
+    sessionCreatedIds.value.add(newId)
 
     if (data.queuedConnections) {
       for (const qc of data.queuedConnections) {
@@ -602,6 +632,11 @@ export function useNetworksStore() {
     isPlaceholderNetwork,
     getSelectableNetworksByRegion,
     getSelectableNetworks,
+    getVisibleNetworks,
+    dayMode,
+    getDayMode,
+    setDayMode,
+    markNetworkReady,
     createNetwork,
     deleteNetwork,
     addConnection,

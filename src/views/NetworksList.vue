@@ -16,6 +16,40 @@
     </template>
 
     <div class="networks-list">
+      <!-- Empty state (Day 1) — start here and build up -->
+      <section v-if="isEmpty" class="networks-empty" data-testid="networks-empty">
+        <span class="empty-icon"><ConnectionsIcon :size="KUI_ICON_SIZE_50" decorative /></span>
+        <h2 class="empty-title">Create your first network</h2>
+        <p class="empty-desc">
+          A network is a private, single-region space in your cloud where Kong runs dedicated cloud gateways. Create one, then add the private connectivity and DNS your services need.
+        </p>
+        <div class="empty-actions">
+          <KButton appearance="primary" data-testid="empty-create" @click="router.push({ name: 'networks-create' })">
+            <AddCircleIcon decorative />
+            Create network
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            @click="openDocs"
+          >
+            Learn more
+          </KButton>
+        </div>
+        <div class="empty-cards">
+          <div class="empty-card">
+            <span class="empty-card-icon"><WorldPrivateIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+            <h3 class="empty-card-title">Private by design</h3>
+            <p class="empty-card-desc">Kong runs inside your cloud region and is reachable only through the private connectivity you configure — nothing is exposed publicly by default.</p>
+          </div>
+          <div class="empty-card">
+            <span class="empty-card-icon"><ConnectionsIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+            <h3 class="empty-card-title">Bring your own CIDR</h3>
+            <p class="empty-card-desc">Choose a CIDR block that fits your network so peering and routing line up with what you already run, with no overlaps.</p>
+          </div>
+        </div>
+      </section>
+
+      <template v-else>
       <!-- Filter row -->
       <div class="list-toolbar">
         <div class="filter-controls">
@@ -143,6 +177,7 @@
           />
         </template>
       </EntityBaseTable>
+      </template>
     </div>
   </PageLayout>
 
@@ -177,17 +212,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   KUI_COLOR_TEXT_DECORATIVE_AQUA,
   KUI_ICON_SIZE_20,
   KUI_ICON_SIZE_30,
+  KUI_ICON_SIZE_50,
 } from '@kong/design-tokens'
 import {
   AddCircleIcon,
   ConnectionsIcon,
   WarningIcon,
+  WorldPrivateIcon,
 } from '@kong/icons'
 import {
   KBadge,
@@ -234,16 +271,25 @@ const displayHeaders = [
   { label: 'Private DNS', key: 'privateDns', sortable: false },
 ]
 
+// Networks visible for the current prototype day-mode (Day 1 = only session-created).
+const visibleNetworks = computed(() => store.getVisibleNetworks())
+const isEmpty = computed(() => visibleNetworks.value.length === 0)
+
+const openDocs = () => {
+  window.open('https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/', '_blank')
+}
+
 const fetcher = async () => {
   await new Promise(resolve => setTimeout(resolve, 200))
-  // Real, selectable networks only — legacy "default" placeholders and
-  // terminating networks are never shown (mirrors production filtering out offline).
-  let data = store.getSelectableNetworks()
+  let data = visibleNetworks.value
   if (statusFilter.value) {
     data = data.filter(n => n.status === statusFilter.value)
   }
   return { data, total: data.length }
 }
+
+// Refetch when the day-mode changes so the table reflects the switch.
+watch(() => store.dayMode.value, () => { fetcherCacheKey.value++ })
 
 // Network lifecycle state, shown inline in the Name cell (production pattern).
 const stateLabel = (status: string) =>
@@ -330,6 +376,90 @@ const confirmDelete = () => {
   display: flex;
   flex-direction: column;
   gap: $kui-space-60;
+}
+
+// Day 1 empty state — icon, title, description, actions, then two benefit cards.
+.networks-empty {
+  align-items: center;
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  padding: $kui-space-130 $kui-space-80;
+  text-align: center;
+
+  .empty-icon {
+    align-items: center;
+    background-color: $kui-color-background-decorative-aqua-weakest;
+    border-radius: $kui-border-radius-40;
+    color: $kui-color-text-decorative-aqua;
+    display: flex;
+    height: 56px;
+    justify-content: center;
+    margin-bottom: $kui-space-60;
+    width: 56px;
+  }
+
+  .empty-title {
+    color: $kui-color-text;
+    font-size: $kui-font-size-60;
+    font-weight: $kui-font-weight-bold;
+    margin: $kui-space-0;
+  }
+
+  .empty-desc {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-40;
+    line-height: $kui-line-height-50;
+    margin: $kui-space-40 $kui-space-0 $kui-space-70;
+    max-width: 520px;
+  }
+
+  .empty-actions {
+    display: flex;
+    gap: $kui-space-40;
+    margin-bottom: $kui-space-90;
+  }
+
+  .empty-cards {
+    display: grid;
+    gap: $kui-space-60;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 720px;
+    width: 100%;
+
+    @media (max-width: 720px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .empty-card {
+    background-color: $kui-color-background-neutral-weakest;
+    border: $kui-border-width-10 solid $kui-color-border;
+    border-radius: $kui-border-radius-40;
+    display: flex;
+    flex-direction: column;
+    gap: $kui-space-30;
+    padding: $kui-space-70;
+    text-align: left;
+  }
+
+  .empty-card-icon { color: $kui-color-text-neutral; }
+
+  .empty-card-title {
+    color: $kui-color-text;
+    font-size: $kui-font-size-40;
+    font-weight: $kui-font-weight-semibold;
+    margin: $kui-space-0;
+  }
+
+  .empty-card-desc {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-30;
+    line-height: $kui-line-height-40;
+    margin: $kui-space-0;
+  }
 }
 
 .list-toolbar {
