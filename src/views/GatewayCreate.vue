@@ -548,6 +548,27 @@
               </div>
             </div>
           </section>
+
+          <!-- Live configuration-as-code — updates as you configure the deployment -->
+          <aside class="config-side" data-testid="dp-config-panel">
+            <div class="config-block-bar">
+              <h3 class="config-block-title">Configuration</h3>
+              <KSelect
+                v-model="codeLang"
+                :items="codeLangOptions"
+                appearance="select"
+                :width="'130px'"
+                data-testid="deploy-config-lang"
+              />
+            </div>
+            <p class="config-block-desc">Provision this data plane node from the API, Terraform, or curl instead of the UI.</p>
+            <KCodeBlock
+              id="dp-config-preview"
+              :code="previewCode"
+              :language="previewLanguage"
+              theme="dark"
+            />
+          </aside>
         </div>
 
         <footer class="step-footer">
@@ -1717,13 +1738,33 @@ const finish = (destination: { name: string }) => {
 
 // ── Configuration step: two-column layout ────────────────────────────────────────
 .config-layout {
-  display: flex;
-  flex-direction: column;
+  align-items: start;
+  display: grid;
   gap: $kui-space-80;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .config-form {
   min-width: 0;
+}
+
+// Live config rail on the deployment step (sticks while you scroll the form).
+.config-side {
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: sticky;
+  top: $kui-space-70;
+
+  @media (max-width: 900px) {
+    position: static;
+  }
 }
 
 .advanced-block {
@@ -1793,7 +1834,7 @@ const finish = (destination: { name: string }) => {
   gap: $kui-space-70;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr);
 
-  @media (max-width: 1080px) {
+  @media (max-width: 900px) {
     grid-template-columns: minmax(0, 1fr);
   }
 }

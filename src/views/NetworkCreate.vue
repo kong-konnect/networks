@@ -268,26 +268,49 @@
       </footer>
         </div>
 
-        <!-- Persistent CIDR guidance — getting the CIDR right matters, so keep it visible -->
-        <aside class="help-panel" data-testid="cidr-help-panel">
-          <div class="help-panel-head">
-            <InfoIcon :size="KUI_ICON_SIZE_30" decorative />
-            <h3 class="help-panel-title">Choosing a CIDR block</h3>
-          </div>
-          <p class="help-panel-text">A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. It can't be changed after creation, and shouldn't overlap with CIDR blocks in your own cloud networks.</p>
+        <div class="side-rail">
+          <!-- Persistent CIDR guidance — getting the CIDR right matters, so keep it visible -->
+          <aside class="help-panel" data-testid="cidr-help-panel">
+            <div class="help-panel-head">
+              <InfoIcon :size="KUI_ICON_SIZE_30" decorative />
+              <h3 class="help-panel-title">Choosing a CIDR block</h3>
+            </div>
+            <p class="help-panel-text">A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. It can't be changed after creation, and shouldn't overlap with CIDR blocks in your own cloud networks.</p>
 
-          <h4 class="help-panel-subtitle">Requirements</h4>
-          <ul class="help-panel-list">
-            <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
-            <li><strong>Private IP range:</strong> the block must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
-          </ul>
+            <h4 class="help-panel-subtitle">Requirements</h4>
+            <ul class="help-panel-list">
+              <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
+              <li><strong>Private IP range:</strong> the block must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
+            </ul>
 
-          <h4 class="help-panel-subtitle">Avoid</h4>
-          <ul class="help-panel-list">
-            <li>Ranges already used by your organization — overlaps break VPC peering.</li>
-            <li>Reserved ranges 10.100.0.0/16 and 172.17.0.0/16.</li>
-          </ul>
-        </aside>
+            <h4 class="help-panel-subtitle">Avoid</h4>
+            <ul class="help-panel-list">
+              <li>Ranges already used by your organization — overlaps break VPC peering.</li>
+              <li>Reserved ranges 10.100.0.0/16 and 172.17.0.0/16.</li>
+            </ul>
+          </aside>
+
+          <!-- Live configuration-as-code — updates as you fill the form -->
+          <section class="cfg-panel" data-testid="network-config-panel">
+            <div class="cfg-panel-bar">
+              <h3 class="cfg-panel-title">Configuration</h3>
+              <KSelect
+                v-model="netCodeLang"
+                :items="netCodeLangOptions"
+                appearance="select"
+                :width="'130px'"
+                data-testid="network-config-lang"
+              />
+            </div>
+            <p class="cfg-panel-desc">Create this network from the API, Terraform, or curl instead of the UI.</p>
+            <KCodeBlock
+              id="network-config-preview"
+              :code="netPreviewCode"
+              :language="netPreviewLanguage"
+              theme="dark"
+            />
+          </section>
+        </div>
       </div>
     </div>
   </PageLayout>
@@ -303,6 +326,7 @@ import {
   KBadge,
   KButton,
   KCheckbox,
+  KCodeBlock,
   KInput,
   KLabel,
   KSelect,
@@ -422,6 +446,48 @@ const canCreate = computed(() =>
   form.zones.length >= 2,
 )
 
+// ── Live configuration-as-code (updates as the form is filled) ────────────────
+const netCodeLang = ref<'json' | 'terraform' | 'curl'>('json')
+const netCodeLangOptions = [
+  { label: 'JSON', value: 'json' },
+  { label: 'Terraform', value: 'terraform' },
+  { label: 'curl', value: 'curl' },
+]
+const tfName = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'network'
+
+const netJsonConfig = computed(() => JSON.stringify({
+  name: form.name || 'my-network',
+  provider: form.cloud,
+  region: form.region,
+  cidr_block: form.cidr || '10.0.0.0/16',
+  availability_zones: form.zones,
+}, null, 2))
+
+const netTerraformConfig = computed(() => [
+  `resource "konnect_cloud_gateway_network" "${tfName(form.name)}" {`,
+  `  name                              = "${form.name || 'my-network'}"`,
+  `  cloud_gateway_provider_account_id = "provider-account-id"`,
+  `  region                            = "${form.region}"`,
+  `  cidr_block                        = "${form.cidr || '10.0.0.0/16'}"`,
+  `  availability_zones                = [${form.zones.map(z => `"${z}"`).join(', ')}]`,
+  '}',
+].join('\n'))
+
+const netCurlConfig = computed(() =>
+  `curl -X POST https://us.api.konghq.com/v2/cloud-gateways/networks \\
+  -H "Authorization: Bearer $KONNECT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '${netJsonConfig.value}'`)
+
+const netPreviewCode = computed(() =>
+  netCodeLang.value === 'terraform' ? netTerraformConfig.value
+    : netCodeLang.value === 'curl' ? netCurlConfig.value
+      : netJsonConfig.value)
+const netPreviewLanguage = computed(() =>
+  netCodeLang.value === 'terraform' ? 'hcl'
+    : netCodeLang.value === 'curl' ? 'bash'
+      : 'json')
+
 const handleCreate = () => {
   if (!canCreate.value || isSubmitting.value) return
   isSubmitting.value = true
@@ -466,7 +532,19 @@ const handleCreate = () => {
   min-width: 0;
 }
 
-// Sticky CIDR guidance panel.
+// Right rail holds the CIDR guidance + the live config panel; the rail sticks.
+.side-rail {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-60;
+  position: sticky;
+  top: $kui-space-70;
+
+  @media (max-width: 900px) {
+    position: static;
+  }
+}
+
 .help-panel {
   background-color: $kui-color-background-neutral-weakest;
   border: $kui-border-width-10 solid $kui-color-border;
@@ -475,12 +553,6 @@ const handleCreate = () => {
   flex-direction: column;
   gap: $kui-space-40;
   padding: $kui-space-70;
-  position: sticky;
-  top: $kui-space-70;
-
-  @media (max-width: 900px) {
-    position: static;
-  }
 
   .help-panel-head {
     align-items: center;
@@ -519,6 +591,42 @@ const handleCreate = () => {
     line-height: $kui-line-height-40;
     margin: $kui-space-0;
     padding-left: $kui-space-70;
+  }
+}
+
+// Live configuration-as-code panel in the right rail.
+.cfg-panel {
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .cfg-panel-bar {
+    align-items: center;
+    background-color: $kui-color-background-neutral-weakest;
+    border-bottom: $kui-border-width-10 solid $kui-color-border;
+    display: flex;
+    gap: $kui-space-40;
+    justify-content: space-between;
+    padding: $kui-space-40 $kui-space-50;
+  }
+
+  .cfg-panel-title {
+    color: $kui-color-text;
+    font-size: $kui-font-size-40;
+    font-weight: $kui-font-weight-semibold;
+    margin: $kui-space-0;
+  }
+
+  .cfg-panel-desc {
+    background-color: $kui-color-background-neutral-weakest;
+    border-bottom: $kui-border-width-10 solid $kui-color-border;
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-20;
+    line-height: $kui-line-height-30;
+    margin: $kui-space-0;
+    padding: $kui-space-0 $kui-space-50 $kui-space-40;
   }
 }
 
