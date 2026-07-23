@@ -48,69 +48,51 @@
     <!-- ── MAP MODE: entity-relationship diagram ───────────────────────────── -->
     <template v-if="mode === 'map'">
       <div class="ncm-body">
-        <div class="ncm-scroll">
-          <div
-            class="erd-canvas"
-            :style="{ width: `${layout.W}px`, height: `${layout.H}px` }"
-            data-testid="ncm-erd"
+        <div class="dtree" data-testid="ncm-tree">
+          <!-- Root: the network (its resources depend on it as their container) -->
+          <button
+            type="button"
+            class="dt-root"
+            :class="{ 'dt-selected': selectedId === null }"
+            data-testid="ncm-network"
+            @click="selectedId = null"
           >
-            <!-- Relationship lines -->
-            <svg class="erd-edges" :width="layout.W" :height="layout.H" :viewBox="`0 0 ${layout.W} ${layout.H}`">
-              <path
-                v-for="e in layout.edges"
-                :key="`edge-${e.id}`"
-                :d="`M ${e.x1} ${e.y1} C ${e.x1 + 40} ${e.y1}, ${e.x2 - 40} ${e.y2}, ${e.x2} ${e.y2}`"
-                class="erd-edge"
-                :class="[`erd-edge--${e.tone}`, { 'erd-edge--dashed': e.dashed }]"
-                fill="none"
-              />
-            </svg>
-            <span
-              v-for="e in layout.edges"
-              :key="`lbl-${e.id}`"
-              class="erd-edge-label"
-              :style="{ left: `${e.mx}px`, top: `${e.my}px` }"
-            >{{ e.label }}</span>
+            <span class="dt-caret">▾</span>
+            <span class="dt-root-kicker">Network</span>
+            <span class="dt-root-name">{{ network.name }}</span>
+            <span class="dt-root-meta">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }} · {{ network.regions[0].cidr }}</span>
+            <KBadge :appearance="netStatusAppearance">{{ netStatusLabel }}</KBadge>
+          </button>
 
-            <!-- Network entity -->
-            <button
-              type="button"
-              class="erd-network"
-              :class="{ 'erd-selected': selectedId === null }"
-              :style="{ left: `${layout.netX}px`, top: `${layout.netY}px` }"
-              data-testid="ncm-network"
-              @click="selectedId = null"
-            >
-              <span class="erd-box-kicker">Network</span>
-              <span class="erd-net-title">{{ network.name }}</span>
-              <KBadge :appearance="netStatusAppearance">{{ netStatusLabel }}</KBadge>
-              <dl class="erd-net-fields">
-                <div><dt>Provider</dt><dd>{{ network.cloud.toUpperCase() }}</dd></div>
-                <div><dt>Region</dt><dd>{{ network.regions[0].region }}</dd></div>
-                <div><dt>CIDR</dt><dd>{{ network.regions[0].cidr }}</dd></div>
-                <div><dt>Zones</dt><dd>{{ (network.regions[0].zones ?? []).join(', ') || '—' }}</dd></div>
-              </dl>
-            </button>
+          <div class="dt-branch">
+            <template v-for="g in visibleGroups" :key="g.key">
+              <button type="button" class="dt-group" @click="toggleGroup(g.key)">
+                <span class="dt-caret">{{ openGroups[g.key] ? '▾' : '▸' }}</span>
+                <span class="dt-group-label">{{ g.label }}</span>
+                <span class="dt-count">{{ g.items.length }}</span>
+                <span v-if="groupAttention(g)" class="dt-att">{{ groupAttention(g) }} need attention</span>
+              </button>
 
-            <!-- Related entities -->
-            <button
-              v-for="b in layout.boxes"
-              :key="b.id"
-              type="button"
-              class="erd-box"
-              :class="[`erd-box--${b.tone}`, { 'erd-selected': selectedId === b.id }]"
-              :style="{ left: `${b.x}px`, top: `${b.y}px` }"
-              :data-testid="`ncm-box-${b.id}`"
-              @click="selectedId = b.id"
-            >
-              <span class="erd-box-head">
-                <span class="erd-box-kicker">{{ b.categoryLabel }}</span>
-                <span class="ncm-dot" :class="`ncm-dot--${b.tone}`" />
-              </span>
-              <span class="erd-box-title">{{ b.name }}</span>
-              <span class="erd-box-sub">{{ b.sub }}</span>
-              <span class="erd-box-status" :class="`erd-status--${b.tone}`">{{ b.statusLabel }}</span>
-            </button>
+              <template v-if="openGroups[g.key]">
+                <div v-for="it in g.items" :key="it.id" class="dt-item-wrap">
+                  <button
+                    type="button"
+                    class="dt-item"
+                    :class="{ 'dt-selected': selectedId === it.id }"
+                    :data-testid="`ncm-tree-${it.id}`"
+                    @click="selectedId = it.id"
+                  >
+                    <span class="dt-line">└─</span>
+                    <span class="dt-item-name">{{ it.name }}</span>
+                    <span class="dt-tag" :class="`dt-tag--${it.tone}`">{{ it.statusLabel }}</span>
+                  </button>
+                  <div v-if="it.sub" class="dt-sub">
+                    <span class="dt-line dt-line--deep">└─</span>
+                    <span class="dt-sub-text" :class="`dt-status--${it.sub.tone}`">{{ it.sub.text }}</span>
+                  </div>
+                </div>
+              </template>
+            </template>
           </div>
         </div>
 
@@ -258,43 +240,62 @@ const allNodes = computed<ErdNode[]>(() => {
 
 const problemNodes = computed(() => allNodes.value.filter(n => n.tone !== 'ready'))
 const healthyNodes = computed(() => allNodes.value.filter(n => n.tone === 'ready'))
-const erdNodes = computed(() => showAll.value ? allNodes.value : problemNodes.value)
 
-// ── ERD layout (fixed coordinate space; Network anchor left, related entities right) ──
-const NET_W = 260
-const NET_H = 214
-const BOX_W = 300
-const BOX_H = 112
-const VGAP = 26
-const COLGAP = 132
+// ── Dependency tree ───────────────────────────────────────────────────────────
+// Network contains its resources; a DNS record expands into the connection it
+// resolves through and the target it reaches — the dependency between resources.
+const targetToneOf = (s: 'reachable' | 'unreachable' | 'pending'): Tone =>
+  s === 'reachable' ? 'ready' : s === 'unreachable' ? 'error' : 'pending'
+const connById = (id: string) => props.connections.find(c => c.id === id)
 
-const relLabel = (c: Category) =>
-  c === 'connectivity' ? 'attached' : c === 'dns' ? 'resolves through' : 'used by'
+interface TreeItem {
+  id: string
+  name: string
+  statusLabel: string
+  tone: Tone
+  sub?: { text: string; tone: Tone }
+}
+interface TreeGroup { key: string; label: string; items: TreeItem[] }
 
-const layout = computed(() => {
-  const nodes = erdNodes.value
-  const n = nodes.length
-  const totalRight = n > 0 ? n * BOX_H + (n - 1) * VGAP : 0
-  const H = Math.max(NET_H, totalRight, 160)
-  const W = NET_W + COLGAP + BOX_W
-  const netY = (H - NET_H) / 2
-  const startY = (H - totalRight) / 2
-  const netCx = NET_W
-  const netCy = netY + NET_H / 2
-  const boxes = nodes.map((node, i) => ({ ...node, x: NET_W + COLGAP, y: startY + i * (BOX_H + VGAP) }))
-  const edges = boxes.map(b => {
-    const x2 = b.x
-    const y2 = b.y + BOX_H / 2
+const openGroups = ref<Record<string, boolean>>({ gateways: true, connectivity: true, dns: true })
+const toggleGroup = (k: string) => { openGroups.value[k] = !openGroups.value[k] }
+
+const allGroups = computed<TreeGroup[]>(() => {
+  const gateways: TreeItem[] = props.gateways.map(g => ({
+    id: `gw-${g.id}`, name: g.name, statusLabel: 'Ready', tone: 'ready',
+  }))
+  const connectivity: TreeItem[] = props.connections.map(c => {
+    const svc = props.services.find(s => s.connectionId === c.id)
     return {
-      id: b.id, x1: netCx, y1: netCy, x2, y2,
-      mx: (netCx + x2) / 2, my: (netCy + y2) / 2,
-      label: relLabel(b.category), tone: b.tone, dashed: b.tone === 'pending',
+      id: `conn-${c.id}`, name: c.name, statusLabel: connStatusLabel(c.status), tone: connTone(c.status),
+      sub: svc ? { text: `reaches ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
     }
   })
-  return { W, H, netX: 0, netY, boxes, edges }
+  const dns: TreeItem[] = props.dnsConfigs.map(d => {
+    const svc = props.services.find(s => s.dnsConfigId === d.id)
+    const conn = svc ? connById(svc.connectionId) : undefined
+    return {
+      id: `dns-${d.id}`, name: d.name, statusLabel: dnsStatusLabel(d.status), tone: dnsTone(d.status),
+      sub: svc && conn ? { text: `via ${conn.name} → ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
+    }
+  })
+  return [
+    { key: 'gateways', label: 'Gateways', items: gateways },
+    { key: 'connectivity', label: 'Private connectivity', items: connectivity },
+    { key: 'dns', label: 'Private DNS', items: dns },
+  ]
 })
 
-const selected = computed(() => erdNodes.value.find(n => n.id === selectedId.value) || null)
+// Problems-first: an item shows when itself or its dependency isn't healthy.
+const itemNeedsAttention = (it: TreeItem) => it.tone !== 'ready' || (!!it.sub && it.sub.tone !== 'ready')
+const visibleGroups = computed<TreeGroup[]>(() =>
+  allGroups.value
+    .map(g => ({ ...g, items: showAll.value ? g.items : g.items.filter(itemNeedsAttention) }))
+    .filter(g => g.items.length > 0),
+)
+const groupAttention = (g: TreeGroup) => g.items.filter(itemNeedsAttention).length
+
+const selected = computed(() => allNodes.value.find(n => n.id === selectedId.value) || null)
 
 // ── Network status ────────────────────────────────────────────────────────────
 const netStatusLabel = computed(() =>
@@ -443,126 +444,111 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 
 .ncm-scroll { overflow-x: auto; }
 
-// ── ERD canvas ────────────────────────────────────────────────────────────────
-.erd-canvas {
-  background-color: $kui-color-background-neutral-weakest;
-  background-image: radial-gradient($kui-color-border 1px, transparent 1px);
-  background-size: 22px 22px;
+// ── Dependency tree ────────────────────────────────────────────────────────────
+.dtree {
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
-  min-width: 700px;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.erd-edges {
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-}
-
-.erd-edge {
-  stroke-width: 1.5px;
-
-  &--ready { stroke: $kui-color-text-success; }
-  &--pending { stroke: $kui-color-text-warning; }
-  &--error { stroke: $kui-color-text-danger; }
-  &--dashed { stroke-dasharray: 5 4; }
-}
-
-.erd-edge-label {
-  background-color: $kui-color-background;
-  border-radius: $kui-border-radius-20;
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-10;
-  padding: $kui-space-10 $kui-space-30;
-  position: absolute;
-  transform: translate(-50%, -50%);
-  white-space: nowrap;
-  z-index: 1;
-}
-
-.erd-network,
-.erd-box {
-  background-color: $kui-color-background;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-40;
+.dt-root {
+  align-items: center;
+  background-color: $kui-color-background-primary-weakest;
+  border: none;
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: $kui-space-20;
-  position: absolute;
+  gap: $kui-space-40;
+  padding: $kui-space-50 $kui-space-60;
   text-align: left;
-  transition: border-color 0.12s ease-in, box-shadow 0.12s ease-in;
-  z-index: 2;
+  width: 100%;
 
-  &:hover { box-shadow: $kui-shadow; }
-  &.erd-selected { border-color: $kui-color-border-primary; box-shadow: $kui-shadow-focus; }
+  &.dt-selected { box-shadow: inset $kui-space-20 0 0 0 $kui-color-border-primary; }
 }
 
-.erd-network {
-  border-color: $kui-color-border-primary;
-  padding: $kui-space-50;
-  width: 260px;
-}
-
-.erd-net-title {
-  color: $kui-color-text;
-  font-size: $kui-font-size-40;
-  font-weight: $kui-font-weight-bold;
-}
-
-.erd-net-fields {
-  border-top: $kui-border-width-10 solid $kui-color-border;
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-20;
-  margin: $kui-space-20 $kui-space-0 $kui-space-0;
-  padding-top: $kui-space-40;
-
-  div { display: flex; justify-content: space-between; gap: $kui-space-40; }
-  dt { color: $kui-color-text-neutral; font-size: $kui-font-size-20; }
-  dd { color: $kui-color-text; font-size: $kui-font-size-20; margin: $kui-space-0; text-align: right; }
-}
-
-.erd-box {
-  padding: $kui-space-50;
-  width: 300px;
-
-  &--pending { border-left: $kui-border-width-30 solid $kui-color-background-warning; }
-  &--error { border-left: $kui-border-width-30 solid $kui-color-background-danger; }
-}
-
-.erd-box-head {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-}
-
-.erd-box-kicker {
+.dt-root-kicker {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-10;
   font-weight: $kui-font-weight-semibold;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.dt-root-name { color: $kui-color-text; font-size: $kui-font-size-40; font-weight: $kui-font-weight-bold; }
+.dt-root-meta { color: $kui-color-text-neutral; font-size: $kui-font-size-20; margin-right: auto; }
 
-.erd-box-title {
-  color: $kui-color-text;
-  font-size: $kui-font-size-30;
+.dt-caret { color: $kui-color-text-neutral; flex: 0 0 auto; font-size: $kui-font-size-20; width: 12px; }
+
+.dt-branch { display: flex; flex-direction: column; padding: $kui-space-40 $kui-space-0; }
+
+.dt-group {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  gap: $kui-space-40;
+  padding: $kui-space-40 $kui-space-60;
+  text-align: left;
+  width: 100%;
+
+  &:hover { background-color: $kui-color-background-neutral-weakest; }
+}
+.dt-group-label { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; }
+.dt-count {
+  background-color: $kui-color-background-neutral-weak;
+  border-radius: $kui-border-radius-round;
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-10;
+  padding: 0 $kui-space-30;
+}
+.dt-att { color: $kui-color-text-warning; font-size: $kui-font-size-20; font-weight: $kui-font-weight-semibold; }
+
+.dt-item-wrap { display: flex; flex-direction: column; }
+
+.dt-item {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  gap: $kui-space-40;
+  padding: $kui-space-30 $kui-space-60 $kui-space-30 $kui-space-90;
+  text-align: left;
+  width: 100%;
+
+  &:hover { background-color: $kui-color-background-neutral-weakest; }
+  &.dt-selected { background-color: $kui-color-background-primary-weakest; box-shadow: inset $kui-space-20 0 0 0 $kui-color-border-primary; }
+}
+.dt-line { color: $kui-color-text-neutral-weak; font-family: $kui-font-family-code; flex: 0 0 auto; }
+.dt-line--deep { padding-left: $kui-space-70; }
+.dt-item-name { color: $kui-color-text; font-size: $kui-font-size-30; overflow-wrap: anywhere; }
+
+.dt-tag {
+  border-radius: $kui-border-radius-20;
+  font-size: $kui-font-size-10;
   font-weight: $kui-font-weight-semibold;
-  overflow-wrap: anywhere;
+  margin-left: auto;
+  padding: $kui-space-10 $kui-space-30;
+
+  &--ready { background-color: $kui-color-background-success-weakest; color: $kui-color-text-success; }
+  &--pending { background-color: $kui-color-background-warning-weakest; color: $kui-color-text-warning; }
+  &--error { background-color: $kui-color-background-danger-weakest; color: $kui-color-text-danger; }
 }
 
-.erd-box-sub { color: $kui-color-text-neutral; font-size: $kui-font-size-20; }
-
-.erd-box-status {
-  font-size: $kui-font-size-20;
-  font-weight: $kui-font-weight-semibold;
-
-  &.erd-status--ready { color: $kui-color-text-success; }
-  &.erd-status--pending { color: $kui-color-text-warning; }
-  &.erd-status--error { color: $kui-color-text-danger; }
+.dt-sub {
+  align-items: center;
+  color: $kui-color-text-neutral;
+  display: flex;
+  gap: $kui-space-40;
+  padding: $kui-space-20 $kui-space-60 $kui-space-30 $kui-space-90;
 }
+.dt-sub-text { font-size: $kui-font-size-20; }
+
+.dt-status--ready { color: $kui-color-text-success; }
+.dt-status--pending { color: $kui-color-text-warning; }
+.dt-status--error { color: $kui-color-text-danger; }
 
 .ncm-dot {
   border-radius: $kui-border-radius-circle;
