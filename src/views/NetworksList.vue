@@ -35,16 +35,29 @@
             Learn more
           </KButton>
         </div>
-        <div class="empty-cards">
-          <div class="empty-card">
-            <span class="empty-card-icon"><WorldPrivateIcon :size="KUI_ICON_SIZE_30" decorative /></span>
-            <h3 class="empty-card-title">Private by design</h3>
-            <p class="empty-card-desc">Kong runs inside your cloud region and is reachable only through the private connectivity you configure — nothing is exposed publicly by default.</p>
+        <!-- How a network sits between your clients and your services -->
+        <div class="empty-diagram" aria-hidden="true">
+          <div class="flow-node">
+            <span class="flow-icon"><PeopleIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+            <span class="flow-title">Client</span>
+            <span class="flow-sub">Your users and apps</span>
           </div>
-          <div class="empty-card">
-            <span class="empty-card-icon"><ConnectionsIcon :size="KUI_ICON_SIZE_30" decorative /></span>
-            <h3 class="empty-card-title">Bring your own CIDR</h3>
-            <p class="empty-card-desc">Choose a CIDR block that fits your network so peering and routing line up with what you already run, with no overlaps.</p>
+          <div class="flow-link">
+            <span class="flow-link-row"><span class="flow-link-label">Request</span><span class="flow-arrow">→</span></span>
+            <span class="flow-link-row"><span class="flow-arrow">←</span><span class="flow-link-label flow-link-label--muted">Response</span></span>
+          </div>
+          <div class="flow-node flow-node--center">
+            <span class="flow-icon"><WorldPrivateIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+            <span class="flow-title">Kong network</span>
+            <span class="flow-sub">Private connectivity + DNS</span>
+          </div>
+          <div class="flow-link">
+            <span class="flow-link-row"><span class="flow-link-label">Reaches</span><span class="flow-arrow">→</span></span>
+          </div>
+          <div class="flow-node">
+            <span class="flow-icon"><StackIcon :size="KUI_ICON_SIZE_30" decorative /></span>
+            <span class="flow-title">Your services</span>
+            <span class="flow-sub">Private APIs and upstreams</span>
           </div>
         </div>
       </section>
@@ -223,6 +236,8 @@ import {
 import {
   AddCircleIcon,
   ConnectionsIcon,
+  PeopleIcon,
+  StackIcon,
   WarningIcon,
   WorldPrivateIcon,
 } from '@kong/icons'
@@ -422,44 +437,65 @@ const confirmDelete = () => {
     margin-bottom: $kui-space-90;
   }
 
-  .empty-cards {
-    display: grid;
-    gap: $kui-space-60;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-width: 720px;
-    width: 100%;
-
-    @media (max-width: 720px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .empty-card {
+  // Flow explainer: Client → Kong network → your services (Request / Response).
+  .empty-diagram {
+    align-items: stretch;
     background-color: $kui-color-background-neutral-weakest;
     border: $kui-border-width-10 solid $kui-color-border;
     border-radius: $kui-border-radius-40;
     display: flex;
-    flex-direction: column;
-    gap: $kui-space-30;
-    padding: $kui-space-70;
-    text-align: left;
+    flex-wrap: wrap;
+    gap: $kui-space-50;
+    justify-content: center;
+    max-width: 860px;
+    padding: $kui-space-80 $kui-space-70;
+    width: 100%;
   }
 
-  .empty-card-icon { color: $kui-color-text-neutral; }
+  .flow-node {
+    align-items: center;
+    background-color: $kui-color-background;
+    border: $kui-border-width-10 solid $kui-color-border;
+    border-radius: $kui-border-radius-40;
+    display: flex;
+    flex: 0 1 200px;
+    flex-direction: column;
+    gap: $kui-space-20;
+    padding: $kui-space-60;
+    text-align: center;
 
-  .empty-card-title {
+    &--center { border-color: $kui-color-border-primary; }
+  }
+
+  .flow-icon { color: $kui-color-text-neutral; }
+
+  .flow-title {
     color: $kui-color-text;
     font-size: $kui-font-size-40;
     font-weight: $kui-font-weight-semibold;
-    margin: $kui-space-0;
   }
 
-  .empty-card-desc {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-30;
-    line-height: $kui-line-height-40;
-    margin: $kui-space-0;
+  .flow-sub { color: $kui-color-text-neutral; font-size: $kui-font-size-20; }
+
+  .flow-link {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: $kui-space-20;
+    justify-content: center;
   }
+
+  .flow-link-row { align-items: center; display: flex; gap: $kui-space-20; }
+
+  .flow-link-label {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-20;
+
+    &--muted { color: $kui-color-text-neutral-weak; }
+  }
+
+  .flow-arrow { color: $kui-color-text-neutral; font-size: $kui-font-size-50; }
 }
 
 .list-toolbar {

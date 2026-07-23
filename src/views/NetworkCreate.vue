@@ -245,13 +245,6 @@
 
       <footer class="create-footer">
         <KButton
-          appearance="tertiary"
-          data-testid="network-cancel"
-          @click="router.push({ name: 'networks-list' })"
-        >
-          Cancel
-        </KButton>
-        <KButton
           appearance="primary"
           :disabled="!canCreate || isSubmitting"
           data-testid="network-create-button"
@@ -264,6 +257,20 @@
             decorative
           />
           {{ isSubmitting ? 'Creating network…' : 'Create network' }}
+        </KButton>
+        <KButton
+          appearance="tertiary"
+          data-testid="network-cancel"
+          @click="router.push({ name: 'networks-list' })"
+        >
+          Cancel
+        </KButton>
+        <KButton
+          appearance="tertiary"
+          data-testid="network-view-config"
+          @click="showConfigSlideout = true"
+        >
+          View configuration
         </KButton>
       </footer>
         </div>
@@ -289,30 +296,18 @@
               <li>Reserved ranges 10.100.0.0/16 and 172.17.0.0/16.</li>
             </ul>
           </aside>
-
-          <!-- Live configuration-as-code — updates as you fill the form -->
-          <section class="cfg-panel" data-testid="network-config-panel">
-            <div class="cfg-panel-bar">
-              <h3 class="cfg-panel-title">Configuration</h3>
-              <KSelect
-                v-model="netCodeLang"
-                :items="netCodeLangOptions"
-                appearance="select"
-                :width="'130px'"
-                data-testid="network-config-lang"
-              />
-            </div>
-            <p class="cfg-panel-desc">Create this network from the API, Terraform, or curl instead of the UI.</p>
-            <KCodeBlock
-              id="network-config-preview"
-              :code="netPreviewCode"
-              :language="netPreviewLanguage"
-              theme="dark"
-            />
-          </section>
         </div>
       </div>
     </div>
+
+    <!-- Config-as-code on demand — opened from the footer, not shown inline -->
+    <ConfigSlideout
+      :visible="showConfigSlideout"
+      title="Network configuration"
+      :formats="networkConfigFormats"
+      description="Create this network from the API, Terraform, or curl instead of the UI."
+      @close="showConfigSlideout = false"
+    />
   </PageLayout>
 </template>
 
@@ -326,13 +321,13 @@ import {
   KBadge,
   KButton,
   KCheckbox,
-  KCodeBlock,
   KInput,
   KLabel,
   KSelect,
   ToastManager,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
+import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import { providerIcon, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { CloudProvider } from '@/types'
@@ -446,13 +441,8 @@ const canCreate = computed(() =>
   form.zones.length >= 2,
 )
 
-// ── Live configuration-as-code (updates as the form is filled) ────────────────
-const netCodeLang = ref<'json' | 'terraform' | 'curl'>('json')
-const netCodeLangOptions = [
-  { label: 'JSON', value: 'json' },
-  { label: 'Terraform', value: 'terraform' },
-  { label: 'curl', value: 'curl' },
-]
+// ── Configuration-as-code (opened on demand from the footer) ──────────────────
+const showConfigSlideout = ref(false)
 const tfName = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'network'
 
 const netJsonConfig = computed(() => JSON.stringify({
@@ -479,14 +469,11 @@ const netCurlConfig = computed(() =>
   -H "Content-Type: application/json" \\
   -d '${netJsonConfig.value}'`)
 
-const netPreviewCode = computed(() =>
-  netCodeLang.value === 'terraform' ? netTerraformConfig.value
-    : netCodeLang.value === 'curl' ? netCurlConfig.value
-      : netJsonConfig.value)
-const netPreviewLanguage = computed(() =>
-  netCodeLang.value === 'terraform' ? 'hcl'
-    : netCodeLang.value === 'curl' ? 'bash'
-      : 'json')
+const networkConfigFormats = computed(() => [
+  { label: 'JSON', value: 'json', code: netJsonConfig.value, language: 'json' },
+  { label: 'Terraform', value: 'terraform', code: netTerraformConfig.value, language: 'hcl' },
+  { label: 'curl', value: 'curl', code: netCurlConfig.value, language: 'bash' },
+])
 
 const handleCreate = () => {
   if (!canCreate.value || isSubmitting.value) return
@@ -593,43 +580,6 @@ const handleCreate = () => {
     padding-left: $kui-space-70;
   }
 }
-
-// Live configuration-as-code panel in the right rail.
-.cfg-panel {
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-40;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-
-  .cfg-panel-bar {
-    align-items: center;
-    background-color: $kui-color-background-neutral-weakest;
-    border-bottom: $kui-border-width-10 solid $kui-color-border;
-    display: flex;
-    gap: $kui-space-40;
-    justify-content: space-between;
-    padding: $kui-space-40 $kui-space-50;
-  }
-
-  .cfg-panel-title {
-    color: $kui-color-text;
-    font-size: $kui-font-size-40;
-    font-weight: $kui-font-weight-semibold;
-    margin: $kui-space-0;
-  }
-
-  .cfg-panel-desc {
-    background-color: $kui-color-background-neutral-weakest;
-    border-bottom: $kui-border-width-10 solid $kui-color-border;
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-20;
-    line-height: $kui-line-height-30;
-    margin: $kui-space-0;
-    padding: $kui-space-0 $kui-space-50 $kui-space-40;
-  }
-}
-
 .form-card {
   background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
@@ -754,12 +704,13 @@ const handleCreate = () => {
 }
 
 .create-footer {
+  align-items: center;
   background-color: $kui-color-background;
   border-top: $kui-border-width-10 solid $kui-color-border;
   bottom: $kui-space-0;
   display: flex;
-  gap: $kui-space-40;
-  justify-content: flex-end;
+  gap: $kui-space-50;
+  justify-content: flex-start;
   padding: $kui-space-60 $kui-space-0;
   position: sticky;
   z-index: 1;
