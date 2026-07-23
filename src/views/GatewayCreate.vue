@@ -611,81 +611,11 @@
             <p class="section-help">Here's everything you created and the configuration that was applied.</p>
           </div>
 
-          <div class="review-layout">
-            <!-- Rail: structured summary of what was created -->
-            <aside class="review-summary-rail" data-testid="review-summary">
-              <h3 class="numbered-title">Summary</h3>
-              <dl class="summary-list">
-                <div class="summary-config-group">
-                  <div class="summary-item">
-                    <dt>Gateway version</dt>
-                    <dd>{{ gatewayVersionLabel }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>API access</dt>
-                    <dd>{{ apiAccessLabel }}</dd>
-                  </div>
-                </div>
-                <template
-                  v-for="(deployment, di) in deployments"
-                  :key="di"
-                >
-                  <div class="summary-item">
-                    <dt>Provider</dt>
-                    <dd>
-                      <span class="cell-icon">
-                        <component :is="providerIcon(deployment.provider)" :size="KUI_ICON_SIZE_20" decorative />
-                        {{ providerLabel(deployment.provider) }}
-                      </span>
-                    </dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Region</dt>
-                    <dd>
-                      <span class="cell-icon">
-                        <component :is="regionFlag(deployment.region)" :size="KUI_ICON_SIZE_20" decorative />
-                        {{ regionLabel(deployment.region) }}
-                      </span>
-                    </dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Network</dt>
-                    <dd>{{ deploymentNetwork(deployment).name || '—' }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>CIDR</dt>
-                    <dd>{{ deploymentNetwork(deployment).cidr || '—' }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Zones</dt>
-                    <dd>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</dd>
-                  </div>
-                  <div class="summary-item">
-                    <dt>Network status</dt>
-                    <dd>
-                      <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
-                        {{ networkStatusText(deploymentNetwork(deployment).status) }}
-                      </KBadge>
-                    </dd>
-                  </div>
-                </template>
-              </dl>
-            </aside>
-
-            <!-- Configuration as code — gray block with heading + format selector -->
-            <section class="config-block">
-              <div class="config-block-bar">
-                <h3 class="config-block-title">Data plane configuration</h3>
-                <KSelect
-                  v-model="codeLang"
-                  :items="codeLangOptions"
-                  appearance="select"
-                  :width="'150px'"
-                  data-testid="config-lang-toggle"
-                />
-              </div>
-              <p class="config-block-desc">
-                A read-only copy of this data plane node's configuration. Provision it from the API, Terraform, or curl, or save it to your pipeline.
+          <!-- One view, a Format picker toggles Structured ↔ code (product pattern) -->
+          <section class="review-config" data-testid="review-config">
+            <div class="review-config-bar">
+              <p class="review-config-desc">
+                Review what you're creating, or switch the format to provision it from the API, Terraform, or curl.
                 <a
                   class="config-docs-link"
                   href="https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/"
@@ -696,16 +626,90 @@
                   <ExternalLinkIcon :size="KUI_ICON_SIZE_20" decorative />
                 </a>
               </p>
-              <KCodeBlock
-                id="gateway-config-preview"
-                class="config-code-block"
-                :code="previewCode"
-                :language="previewLanguage"
-                theme="light"
-                data-testid="config-code-block"
-              />
-            </section>
-          </div>
+              <label class="format-picker">
+                <span class="format-label">Format</span>
+                <KSelect
+                  v-model="reviewFormat"
+                  :items="reviewFormatOptions"
+                  appearance="select"
+                  :width="'150px'"
+                  data-testid="review-format"
+                />
+              </label>
+            </div>
+
+            <!-- Structured -->
+            <dl
+              v-if="reviewFormat === 'structured'"
+              class="summary-list review-structured"
+              data-testid="review-structured"
+            >
+              <div class="summary-config-group">
+                <div class="summary-item">
+                  <dt>Gateway version</dt>
+                  <dd>{{ gatewayVersionLabel }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>API access</dt>
+                  <dd>{{ apiAccessLabel }}</dd>
+                </div>
+              </div>
+              <template
+                v-for="(deployment, di) in deployments"
+                :key="di"
+              >
+                <div class="summary-item">
+                  <dt>Provider</dt>
+                  <dd>
+                    <span class="cell-icon">
+                      <component :is="providerIcon(deployment.provider)" :size="KUI_ICON_SIZE_20" decorative />
+                      {{ providerLabel(deployment.provider) }}
+                    </span>
+                  </dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Region</dt>
+                  <dd>
+                    <span class="cell-icon">
+                      <component :is="regionFlag(deployment.region)" :size="KUI_ICON_SIZE_20" decorative />
+                      {{ regionLabel(deployment.region) }}
+                    </span>
+                  </dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Network</dt>
+                  <dd>{{ deploymentNetwork(deployment).name || '—' }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>CIDR</dt>
+                  <dd>{{ deploymentNetwork(deployment).cidr || '—' }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Zones</dt>
+                  <dd>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</dd>
+                </div>
+                <div class="summary-item">
+                  <dt>Network status</dt>
+                  <dd>
+                    <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
+                      {{ networkStatusText(deploymentNetwork(deployment).status) }}
+                    </KBadge>
+                  </dd>
+                </div>
+              </template>
+            </dl>
+
+            <!-- Code -->
+            <KCodeBlock
+              v-else
+              id="gateway-config-preview"
+              class="config-code-block"
+              :code="reviewCode"
+              :language="reviewLang"
+              theme="light"
+              data-testid="config-code-block"
+            />
+          </section>
         </section>
 
         <footer class="step-footer">
@@ -1135,6 +1139,24 @@ const codeLangOptions = [
   { label: 'Terraform', value: 'terraform' },
   { label: 'curl', value: 'curl' },
 ]
+
+// Review = one view; a Format picker toggles Structured ↔ code (matches the
+// product's config-view pattern). decK/YAML don't apply to Dedicated Cloud Gateway.
+const reviewFormat = ref<'structured' | 'json' | 'terraform' | 'curl'>('structured')
+const reviewFormatOptions = [
+  { label: 'Structured', value: 'structured' },
+  { label: 'JSON', value: 'json' },
+  { label: 'Terraform', value: 'terraform' },
+  { label: 'curl', value: 'curl' },
+]
+const reviewCode = computed(() =>
+  reviewFormat.value === 'terraform' ? terraformConfig.value
+    : reviewFormat.value === 'curl' ? curlConfig.value
+      : apiConfig.value)
+const reviewLang = computed(() =>
+  reviewFormat.value === 'terraform' ? 'hcl'
+    : reviewFormat.value === 'curl' ? 'bash'
+      : 'json')
 
 // Network descriptor for a deployment — the selected network's name/CIDR/status,
 // or empty when nothing is selected yet.
@@ -1828,15 +1850,47 @@ const finish = (destination: { name: string }) => {
 
 // ── Review: side-by-side config + summary rail (metering-inspired) ───────────────
 // Two equal-height cards side by side (Summary + configuration).
-.review-layout {
-  align-items: stretch;
-  display: grid;
-  gap: $kui-space-70;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr);
+// Review — single bordered container; a Format picker toggles Structured ↔ code.
+.review-config {
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-  @media (max-width: 900px) {
-    grid-template-columns: minmax(0, 1fr);
+.review-config-bar {
+  align-items: center;
+  background-color: $kui-color-background-neutral-weakest;
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
+  display: flex;
+  gap: $kui-space-60;
+  justify-content: space-between;
+  padding: $kui-space-50 $kui-space-60;
+}
+
+.review-config-desc {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
+  margin: $kui-space-0;
+}
+
+.format-picker {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: $kui-space-40;
+
+  .format-label {
+    color: $kui-color-text-neutral;
+    font-size: $kui-font-size-30;
+    font-weight: $kui-font-weight-semibold;
   }
+}
+
+.review-structured {
+  padding: $kui-space-70;
 }
 
 // Configuration block: one gray container, heading + selector in its own top bar,

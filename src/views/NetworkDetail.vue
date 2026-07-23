@@ -46,6 +46,12 @@
             Add connection
           </KDropdownItem>
           <KDropdownItem
+            data-testid="network-view-config"
+            @click="showConfigSlideout = true"
+          >
+            View configuration
+          </KDropdownItem>
+          <KDropdownItem
             danger
             has-divider
             @click="handleDeleteNetwork"
@@ -570,6 +576,16 @@
     />
   </div>
 
+  <!-- View configuration slideout — config-as-code on demand -->
+  <ConfigSlideout
+    v-if="network"
+    :visible="showConfigSlideout"
+    :title="`${network.name} configuration`"
+    :formats="networkConfigFormats"
+    description="A read-only copy of this network's configuration. Provision it from the API, Terraform, or curl, or save it to your pipeline."
+    @close="showConfigSlideout = false"
+  />
+
   <!-- Normal delete confirmation -->
   <KModal
     :visible="showDeleteModal"
@@ -703,6 +719,7 @@ import {
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
+import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
 import {
@@ -878,6 +895,39 @@ function provStatusLabel(s: { owner: ProvOwner; state: ProvState }): string {
 }
 
 const dnsList = computed(() => network.value?.dnsConfigs ?? [])
+
+// ── View configuration (config-as-code on demand) ────────────────────────────
+const showConfigSlideout = ref(false)
+const networkConfigFormats = computed(() => {
+  const n = network.value
+  if (!n) return []
+  const r = n.regions[0]
+  const json = JSON.stringify({
+    name: n.name,
+    provider: n.cloud,
+    region: r.region,
+    cidr_block: r.cidr,
+    availability_zones: r.zones ?? [],
+  }, null, 2)
+  const tf = [
+    `resource "konnect_cloud_gateway_network" "${n.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}" {`,
+    `  name                              = "${n.name}"`,
+    `  cloud_gateway_provider_account_id = "provider-account-id"`,
+    `  region                            = "${r.region}"`,
+    `  cidr_block                        = "${r.cidr}"`,
+    `  availability_zones                = [${(r.zones ?? []).map(z => `"${z}"`).join(', ')}]`,
+    '}',
+  ].join('\n')
+  const curl = `curl -X POST https://us.api.konghq.com/v2/cloud-gateways/networks \\
+  -H "Authorization: Bearer $KONNECT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '${json}'`
+  return [
+    { label: 'JSON', value: 'json', code: json, language: 'json' },
+    { label: 'Terraform', value: 'terraform', code: tf, language: 'hcl' },
+    { label: 'curl', value: 'curl', code: curl, language: 'bash' },
+  ]
+})
 
 // Overview summaries — status-at-a-glance for the two capability tabs.
 const connectivitySummary = computed(() => {
