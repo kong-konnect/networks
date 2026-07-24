@@ -292,6 +292,16 @@
                           placeholder="e.g., 10.0.0.0/16"
                           width="100%"
                         />
+                        <p class="cidr-permanent">
+                          <strong>The CIDR range is permanent.</strong> It can't be changed or resized after the network is created.
+                        </p>
+                        <KAlert
+                          v-if="netCidrWarning"
+                          appearance="warning"
+                          class="cidr-warning"
+                          data-testid="add-network-cidr-warning"
+                          :message="netCidrWarning"
+                        />
                       </div>
                       <button
                         type="button"
@@ -362,10 +372,11 @@
                       </div>
                     </div>
 
-                    <!-- Network options + Add new network -->
+                    <!-- Network list: all available networks as radio options, a divider,
+                         then "Create new network" (Konnect select-a-resource pattern) -->
                     <div
                       v-else
-                      class="network-select-row"
+                      class="network-list"
                     >
                       <label
                         v-for="net in networksInRegion(deployment)"
@@ -380,9 +391,10 @@
                           type="radio"
                           :value="net.id"
                           :name="`network-${di}`"
+                          @change="clearDraftNetwork(deployment)"
                         >
                         <span class="network-opt-name">{{ net.name }}</span>
-                        <span class="network-opt-cidr">({{ networkCidr(net, deployment.region) }})</span>
+                        <span class="network-opt-cidr">{{ networkCidr(net, deployment.region) }}</span>
                         <KBadge :appearance="networkStatusBadge(net.status)">
                           <span class="network-opt-badge">
                             <component :is="networkStatusIcon(net.status)" :size="KUI_ICON_SIZE_20" decorative />
@@ -391,15 +403,52 @@
                         </KBadge>
                       </label>
 
+                      <!-- A network the user just defined inline — not created yet; it's
+                           provisioned on submit, so it shows "New", never "Initializing". -->
+                      <label
+                        v-if="deployment.draftNetwork"
+                        class="network-opt"
+                        :class="{ selected: deployment.networkId === '__new__' }"
+                        :data-testid="`network-row-${di}-new`"
+                      >
+                        <input
+                          v-model="deployment.networkId"
+                          class="network-opt-input"
+                          type="radio"
+                          value="__new__"
+                          :name="`network-${di}`"
+                        >
+                        <span class="network-opt-name">{{ deployment.draftNetwork.name }}</span>
+                        <span class="network-opt-cidr">{{ deployment.draftNetwork.cidr }}</span>
+                        <KBadge appearance="neutral">New</KBadge>
+                        <button
+                          type="button"
+                          class="network-opt-edit"
+                          :data-testid="`edit-network-${di}`"
+                          @click.prevent="startNetForm(di)"
+                        >
+                          Edit
+                        </button>
+                      </label>
+
+                      <p
+                        v-if="networksInRegion(deployment).length === 0 && !deployment.draftNetwork"
+                        class="network-empty"
+                      >
+                        No networks in this region yet.
+                      </p>
+
+                      <hr class="network-divider">
+
                       <button
+                        v-if="!deployment.draftNetwork"
                         type="button"
-                        class="network-add-link"
-                        :class="{ 'network-add-link--end': networksInRegion(deployment).length > 0 }"
+                        class="network-create-row"
                         :data-testid="`add-network-${di}`"
                         @click="startNetForm(di)"
                       >
                         <AddIcon :size="KUI_ICON_SIZE_20" decorative />
-                        Add new network
+                        Create new network
                       </button>
                     </div>
                   </div>
@@ -679,7 +728,16 @@
                 <div class="summary-item">
                   <dt>Network status</dt>
                   <dd>
-                    <KBadge :appearance="networkStatusBadge(deploymentNetwork(deployment).status)">
+                    <KBadge
+                      v-if="deploymentNetwork(deployment).isNew"
+                      appearance="neutral"
+                    >
+                      New — created on submit
+                    </KBadge>
+                    <KBadge
+                      v-else
+                      :appearance="networkStatusBadge(deploymentNetwork(deployment).status)"
+                    >
                       {{ networkStatusText(deploymentNetwork(deployment).status) }}
                     </KBadge>
                   </dd>
@@ -795,6 +853,7 @@ import {
   LocationIcon,
 } from '@kong/icons'
 import {
+  KAlert,
   KInput,
   KTextArea,
   KLabel,
@@ -871,9 +930,11 @@ const compareRows = [
 interface Deployment {
   provider: CloudProvider
   region: string
-  // The selected network's id, or '' when none is selected yet. New networks are
-  // created via the inline "Add new network" form, never auto-provisioned.
+  // The selected network's id, '' when none is selected, or '__new__' when the user
+  // defined a network inline. A new network is held as a DRAFT and only created in the
+  // store on final submit — so nothing shows as "Initializing" while the form is open.
   networkId: string
+  draftNetwork?: { name: string; cidr: string; zones: string[] }
 }
 
 // ── Step 2 — configuration ───────────────────────────────────────────────────────
@@ -1034,10 +1095,18 @@ const deployments = reactive<Deployment[]>([makeDeployment()])
 // ── Deployment actions ─────────────────────────────────────────────────────────
 const onProviderChange = (deployment: Deployment) => {
   deployment.region = regionsByProvider[deployment.provider][0]
+  deployment.draftNetwork = undefined
   deployment.networkId = defaultNetworkId(deployment)
 }
 const onRegionChange = (deployment: Deployment) => {
+  // A draft network is tied to a specific provider + region, so drop it on change.
+  deployment.draftNetwork = undefined
   deployment.networkId = defaultNetworkId(deployment)
+}
+
+// Picking an existing network discards the inline draft — the user chose a real one.
+const clearDraftNetwork = (deployment: Deployment) => {
+  if (deployment.networkId !== '__new__') deployment.draftNetwork = undefined
 }
 const addRegion = () => {
   deployments.push(makeDeployment())
@@ -1097,17 +1166,27 @@ const toggleNetFormZone = (zone: string) => {
     ? netForm.zones.filter(z => z !== zone)
     : [...netForm.zones, zone]
 }
+// Hold the inline network as a DRAFT — it isn't created until the wizard is submitted
+// (network + data plane node are provisioned together on submit), so it never shows an
+// "Initializing" state while the user is still filling in the form.
 const saveNetForm = (di: number) => {
   const d = deployments[di]
   if (!d || !netForm.name || !netForm.cidr) return
-  const net = store.createNetwork({
-    name: netForm.name,
-    cloud: d.provider,
-    regions: [{ region: d.region, cidr: netForm.cidr, zones: netForm.zones }],
-  })
-  d.networkId = net.id
+  d.draftNetwork = { name: netForm.name, cidr: netForm.cidr, zones: [...netForm.zones] }
+  d.networkId = '__new__'
   netForm.di = null
 }
+
+// Non-blocking guidance mirroring the create-network form: small ranges can't be resized.
+const netCidrWarning = computed(() => {
+  const cidr = netForm.cidr.trim()
+  if (!cidr || !/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(cidr)) return ''
+  const prefix = Number(cidr.split('/')[1])
+  if (Number.isFinite(prefix) && prefix >= 22) {
+    return 'This is a small range and can\'t be resized later. Choose a larger range (a lower prefix, such as /16 to /20) if you expect to scale.'
+  }
+  return ''
+})
 
 // ── Step navigation / gating ──────────────────────────────────────────────────
 const onTypeNext = () => {
@@ -1120,9 +1199,15 @@ const onTypeNext = () => {
 }
 
 const canReview = computed(() =>
-  // Every deployment must have a real, selected network (created via Add network
-  // or picked from the region's existing networks).
-  deployments.every(d => !!d.provider && !!d.region && !!d.networkId && !!store.getNetworkById(d.networkId)),
+  // Every deployment must have a network selected: either a real existing one, or an
+  // inline draft that will be created on submit.
+  deployments.every(d =>
+    !!d.provider && !!d.region && (
+      d.networkId === '__new__'
+        ? !!d.draftNetwork
+        : (!!d.networkId && !!store.getNetworkById(d.networkId))
+    ),
+  ),
 )
 
 // ── Cloud providers summary (Review) ────────────────────────────────────────────
@@ -1154,14 +1239,25 @@ const reviewLang = computed(() =>
 // Network descriptor for a deployment — the selected network's name/CIDR/status,
 // or empty when nothing is selected yet.
 const deploymentNetwork = (deployment: Deployment) => {
+  // A draft (inline-created) network — not in the store yet; created on submit.
+  if (deployment.networkId === '__new__' && deployment.draftNetwork) {
+    return {
+      name: deployment.draftNetwork.name,
+      cidr: deployment.draftNetwork.cidr,
+      zones: deployment.draftNetwork.zones,
+      status: undefined as NetworkStatus | undefined,
+      isNew: true,
+    }
+  }
   const net = deployment.networkId ? store.getNetworkById(deployment.networkId) : undefined
-  if (!net) return { name: '', cidr: '', zones: [] as string[], status: undefined as NetworkStatus | undefined }
+  if (!net) return { name: '', cidr: '', zones: [] as string[], status: undefined as NetworkStatus | undefined, isNew: false }
   const region = net.regions.find(r => r.region === deployment.region)
   return {
     name: net.name,
     cidr: networkCidr(net, deployment.region),
     zones: region?.zones ?? [],
     status: net.status,
+    isNew: false,
   }
 }
 
@@ -1307,6 +1403,21 @@ const goBackFromType = () => {
 // Deployment is the final step — "View your data plane node" and "Set up later" both
 // persist the captured config, then navigate to the given destination.
 const finish = (destination: { name: string }) => {
+  // On submit, any inline draft networks are created for real — the network and the data
+  // plane node are provisioned together at this point (this is why the form never showed
+  // an "Initializing" state earlier).
+  deployments.forEach((d) => {
+    if (d.networkId === '__new__' && d.draftNetwork) {
+      const net = store.createNetwork({
+        name: d.draftNetwork.name,
+        cloud: d.provider,
+        regions: [{ region: d.region, cidr: d.draftNetwork.cidr, zones: d.draftNetwork.zones }],
+      })
+      d.networkId = net.id
+      d.draftNetwork = undefined
+    }
+  })
+
   store.setGatewayConfig({
     name: controlPlaneName.value,
     dataPlaneType: dpTypeLabel.value,
@@ -1641,18 +1752,23 @@ const finish = (destination: { name: string }) => {
   margin: $kui-space-0;
 }
 
-.network-select-row {
-  align-items: center;
+// Networks are a vertical radio list; a divider separates them from "Create new network".
+.network-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: $kui-space-40 $kui-space-70;
+  flex-direction: column;
+  gap: $kui-space-20;
 }
 
 .network-opt {
   align-items: center;
+  border-radius: $kui-border-radius-20;
   cursor: pointer;
-  display: inline-flex;
-  gap: $kui-space-30;
+  display: flex;
+  gap: $kui-space-40;
+  padding: $kui-space-40 $kui-space-30;
+
+  &:hover { background-color: $kui-color-background-neutral-weakest; }
+  &.selected { background-color: $kui-color-background-primary-weakest; }
 }
 
 .network-opt-input {
@@ -1667,9 +1783,11 @@ const finish = (destination: { name: string }) => {
   font-weight: $kui-font-weight-semibold;
 }
 
+// CIDR takes the remaining space so the status badge (and Edit) sit at the right edge.
 .network-opt-cidr {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-20;
+  margin-right: auto;
 }
 
 .network-opt-badge {
@@ -1678,8 +1796,35 @@ const finish = (destination: { name: string }) => {
   gap: $kui-space-20;
 }
 
-.network-add-link {
+.network-opt-edit {
+  background: none;
+  border: none;
+  color: $kui-color-text-primary;
+  cursor: pointer;
+  font-size: $kui-font-size-20;
+  font-weight: $kui-font-weight-semibold;
+  padding: $kui-space-0;
+
+  &:hover { text-decoration: underline; }
+}
+
+.network-empty {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  margin: $kui-space-0;
+}
+
+.network-divider {
+  background-color: $kui-color-border;
+  border: none;
+  height: $kui-border-width-10;
+  margin: $kui-space-30 $kui-space-0;
+  width: 100%;
+}
+
+.network-create-row {
   align-items: center;
+  align-self: flex-start;
   background: none;
   border: none;
   color: $kui-color-text-primary;
@@ -1691,9 +1836,6 @@ const finish = (destination: { name: string }) => {
   padding: $kui-space-0;
 
   &:hover { text-decoration: underline; }
-
-  // Pushed to the right only when network options precede it.
-  &--end { margin-left: auto; }
 }
 
 // Inline create-a-network form
@@ -1701,6 +1843,19 @@ const finish = (destination: { name: string }) => {
   display: flex;
   flex-direction: column;
   gap: $kui-space-50;
+}
+
+.cidr-permanent {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  line-height: $kui-line-height-30;
+  margin: $kui-space-0;
+
+  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
+}
+
+.cidr-warning {
+  margin-top: $kui-space-30;
 }
 
 .cidr-help-toggle {

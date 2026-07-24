@@ -33,6 +33,12 @@ const routes = [
     component: () => import('../views/ConnectionDetail.vue'),
   },
   {
+    // Must be declared before the :dnsId route so "create" isn't matched as an id.
+    path: '/networks/:id/dns/create',
+    name: 'networks-dns-create',
+    component: () => import('../views/DnsCreate.vue'),
+  },
+  {
     path: '/networks/:id/dns/:dnsId',
     name: 'networks-dns-detail',
     component: () => import('../views/DnsDetail.vue'),

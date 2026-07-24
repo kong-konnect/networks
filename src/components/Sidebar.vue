@@ -378,7 +378,7 @@ const isApiGatewayActive = computed(() =>
 
 const isNetworksActive = computed(() =>
   ['networks-list', 'networks-create', 'networks-detail', 'networks-add-connection',
-    'networks-connection-detail', 'networks-dns-detail', 'networks-test-endpoint'].includes(route.name as string),
+    'networks-connection-detail', 'networks-dns-detail', 'networks-dns-create', 'networks-test-endpoint'].includes(route.name as string),
 )
 
 const isNetworksDetailActive = computed(() =>

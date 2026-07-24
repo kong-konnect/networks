@@ -105,6 +105,16 @@
               :error-message="cidrError"
               @update:model-value="validateCidr"
             />
+            <p class="cidr-permanent" data-testid="cidr-permanent">
+              <strong>The CIDR range is permanent.</strong> It can't be changed or resized after the network is created, so choose a range large enough for future growth.
+            </p>
+            <KAlert
+              v-if="cidrWarning"
+              appearance="warning"
+              class="cidr-warning"
+              data-testid="cidr-warning"
+              :message="cidrWarning"
+            />
           </div>
         </div>
 
@@ -434,6 +444,20 @@ const validateCidr = () => {
   cidrError.value = ''
 }
 
+// Non-blocking guidance: a small prefix (/22 or smaller) leaves few IP addresses, and
+// because the range is permanent, running out means recreating the whole network. Warn
+// but don't block — the user may know their scale.
+const cidrWarning = computed(() => {
+  const cidr = form.cidr.trim()
+  if (!cidr || cidrError.value) return ''
+  const prefix = Number(cidr.split('/')[1])
+  if (!Number.isFinite(prefix)) return ''
+  if (prefix >= 22) {
+    return 'This is a small range and can\'t be resized later. If your traffic grows beyond its IP addresses, you\'d have to recreate the network. Choose a larger range (a lower prefix, such as /16 to /20) if you expect to scale.'
+  }
+  return ''
+})
+
 const canCreate = computed(() =>
   form.name.trim() !== '' && !nameError.value &&
   !!form.region &&
@@ -670,6 +694,19 @@ const handleCreate = () => {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-30;
   margin: $kui-space-0;
+}
+
+.cidr-permanent {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
+  margin: $kui-space-0;
+
+  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
+}
+
+.cidr-warning {
+  margin-top: $kui-space-30;
 }
 
 .two-col {

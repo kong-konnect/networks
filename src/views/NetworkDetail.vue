@@ -95,6 +95,16 @@
               <span v-else class="dash">—</span>
             </div>
             <div class="about-item">
+              <span class="about-label about-label--hint">
+                Provider account ID
+                <KTooltip text="Kong's cloud account ID. Use it when you share resources with Kong from your cloud account, such as an AWS RAM share.">
+                  <InfoIcon class="about-hint-icon" :size="KUI_ICON_SIZE_20" decorative />
+                </KTooltip>
+              </span>
+              <KCopy v-if="network.providerAccountId" format="short" :text="network.providerAccountId" />
+              <span v-else class="dash">—</span>
+            </div>
+            <div class="about-item">
               <span class="about-label">Provider</span>
               <span class="about-value">
                 <component :is="providerIcon(network.cloud)" :size="KUI_ICON_SIZE_20" decorative />
@@ -164,6 +174,10 @@
               <span class="prov-check-status">{{ provStatusLabel(s) }}</span>
             </li>
           </ul>
+          <p class="prov-note">
+            <InfoIcon :size="KUI_ICON_SIZE_20" decorative />
+            Approving resources in your cloud account happens later, only if you set up private connectivity — it isn't needed to provision the network.
+          </p>
         </section>
 
         <!-- Prototype device: skip the 45-min provisioning wait. Intentionally low-prominence. -->
@@ -245,6 +259,16 @@
             <div class="about-item">
               <span class="about-label">Provider network ID</span>
               <KCopy v-if="network.providerNetworkId" format="short" :text="network.providerNetworkId" />
+              <span v-else class="dash">—</span>
+            </div>
+            <div class="about-item">
+              <span class="about-label about-label--hint">
+                Provider account ID
+                <KTooltip text="Kong's cloud account ID. Use it when you share resources with Kong from your cloud account, such as an AWS RAM share.">
+                  <InfoIcon class="about-hint-icon" :size="KUI_ICON_SIZE_20" decorative />
+                </KTooltip>
+              </span>
+              <KCopy v-if="network.providerAccountId" format="short" :text="network.providerAccountId" />
               <span v-else class="dash">—</span>
             </div>
             <div class="about-item">
@@ -630,47 +654,6 @@
     </table>
   </KModal>
 
-  <!-- Add private DNS -->
-  <KModal
-    :visible="showDnsModal"
-    title="Add private DNS"
-    action-button-text="Add"
-    cancel-button-text="Cancel"
-    :action-button-disabled="!dnsForm.name || !dnsForm.usedFor"
-    @cancel="showDnsModal = false"
-    @proceed="saveDns"
-  >
-    <div class="dns-form">
-      <div class="dns-field">
-        <KLabel :required="true">Name / domain</KLabel>
-        <KInput
-          v-model.trim="dnsForm.name"
-          data-testid="dns-domain"
-          placeholder="e.g., payments.internal.company.com"
-          width="100%"
-        />
-      </div>
-      <div class="dns-field">
-        <KLabel :required="true">Type</KLabel>
-        <KSelect
-          v-model="dnsForm.type"
-          :items="dnsTypeOptions"
-          data-testid="dns-type"
-          width="100%"
-        />
-      </div>
-      <div class="dns-field">
-        <KLabel :required="true">Used for</KLabel>
-        <KInput
-          v-model.trim="dnsForm.usedFor"
-          data-testid="dns-usedfor"
-          placeholder="e.g., Upstream services"
-          width="100%"
-        />
-      </div>
-      <p class="field-help">Provisioning starts once added. This DNS configuration begins in a pending state until it resolves.</p>
-    </div>
-  </KModal>
 </template>
 
 <script setup lang="ts">
@@ -687,6 +670,7 @@ import {
   ListIcon,
   CheckCircleIcon,
   ClockIcon,
+  InfoIcon,
   NotificationOutlineIcon,
   ProgressIcon,
   AwsIcon,
@@ -711,9 +695,6 @@ import {
   KEmptyState,
   KModal,
   KTabs,
-  KInput,
-  KLabel,
-  KSelect,
   KTooltip,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
@@ -832,25 +813,13 @@ const nextSteps = computed<NextStep[]>(() => {
 })
 
 // ── Private DNS ───────────────────────────────────────────────────────────
-const showDnsModal = ref(false)
-const dnsForm = ref<{ name: string; type: DnsType; usedFor: string }>({ name: '', type: 'private-hosted-zone', usedFor: '' })
-const dnsTypeOptions = [
-  { label: 'Private hosted zone', value: 'private-hosted-zone' },
-  { label: 'Outbound resolver', value: 'outbound-resolver' },
-]
-
 const dnsTypeLabel = (type: DnsType) => type === 'outbound-resolver' ? 'Outbound resolver' : 'Private hosted zone'
 const dnsStatusLabel = (status: DnsStatus) => status === 'error' ? 'Error' : status === 'pending' ? 'Pending' : 'Ready'
 const dnsStatusBadge = (status: DnsStatus) => status === 'error' ? 'danger' : status === 'pending' ? 'warning' : 'success'
 
+// Add private DNS is a full page (moved off the modal) — same as add connection.
 const openAddDns = () => {
-  dnsForm.value = { name: '', type: 'private-hosted-zone', usedFor: '' }
-  showDnsModal.value = true
-}
-const saveDns = () => {
-  if (!dnsForm.value.name || !dnsForm.value.usedFor) return
-  store.addDnsConfig(networkId.value, { name: dnsForm.value.name, type: dnsForm.value.type, usedFor: dnsForm.value.usedFor })
-  showDnsModal.value = false
+  router.push({ name: 'networks-dns-create', params: { id: networkId.value } })
 }
 const goToDns = (dnsId: string) => {
   router.push({ name: 'networks-dns-detail', params: { id: networkId.value, dnsId } })
@@ -882,10 +851,13 @@ const connectionHeaders = [
 // clear where the network is waiting.
 type ProvState = 'done' | 'current' | 'pending'
 type ProvOwner = 'kong' | 'user'
+// Network provisioning is entirely Kong-driven — no customer action is needed here.
+// Approving resources in your cloud account belongs to PRIVATE CONNECTIVITY (it only
+// happens after the network is ready and you add a connection), so it is not a step
+// on this checklist; it's called out in the note below instead.
 const provisioningSteps: { key: string; title: string; desc: string; owner: ProvOwner; state: ProvState }[] = [
   { key: 'created', owner: 'kong', title: 'Network record created', desc: 'Konnect created the network object with your CIDR, provider, region, and zones.', state: 'done' },
-  { key: 'approve', owner: 'user', title: 'Approve the network in your cloud account', desc: 'Accept the network share in your cloud provider account so Kong can attach the provider network.', state: 'current' },
-  { key: 'provider', owner: 'kong', title: 'Provisioning provider network', desc: 'Kong provisions the provider-side network resources across the selected zones.', state: 'pending' },
+  { key: 'provider', owner: 'kong', title: 'Provisioning provider network', desc: 'Kong provisions the provider-side network resources across the selected zones. No action is needed from you.', state: 'current' },
   { key: 'ready', owner: 'kong', title: 'Network ready', desc: 'Private connectivity and Private DNS become available after this step.', state: 'pending' },
 ]
 function provStatusLabel(s: { owner: ProvOwner; state: ProvState }): string {
@@ -1191,6 +1163,18 @@ const confirmDelete = () => {
   .prov-check-row--awaiting & { color: $kui-color-text-warning; font-weight: $kui-font-weight-semibold; }
 }
 
+.prov-note {
+  align-items: flex-start;
+  color: $kui-color-text-neutral;
+  display: flex;
+  font-size: $kui-font-size-30;
+  gap: $kui-space-30;
+  line-height: $kui-line-height-40;
+  margin: $kui-space-0;
+
+  svg { flex: 0 0 auto; margin-top: $kui-space-10; }
+}
+
 .section-header {
   align-items: flex-start;
   display: flex;
@@ -1371,18 +1355,6 @@ const confirmDelete = () => {
 .dns-actions-cell {
   display: flex;
   gap: $kui-space-60;
-}
-
-.dns-form {
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-60;
-}
-
-.dns-field {
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-30;
 }
 
 .dns-value {
@@ -1793,6 +1765,17 @@ const confirmDelete = () => {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-20;
   font-weight: $kui-font-weight-semibold;
+}
+
+.about-label--hint {
+  align-items: center;
+  display: inline-flex;
+  gap: $kui-space-20;
+}
+
+.about-hint-icon {
+  color: $kui-color-text-neutral-weak;
+  cursor: help;
 }
 
 .about-value {

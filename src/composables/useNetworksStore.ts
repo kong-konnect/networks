@@ -26,6 +26,7 @@ const initialNetworks: Network[] = [
     attachedGatewayCount: 2,
     connectionCount: 4,
     providerNetworkId: 'vpc-0a1b2c3d4e5f67890',
+    providerAccountId: '962300124567',
     dnsConfigs: [
       {
         id: 'dns-1',
@@ -461,6 +462,9 @@ export function useNetworksStore() {
     net.lastCheckedAt = new Date().toISOString()
     if (!net.providerNetworkId) {
       net.providerNetworkId = `vpc-${id.replace(/[^a-z0-9]/gi, '')}${Math.abs(id.length * 7).toString(16)}`
+    }
+    if (!net.providerAccountId) {
+      net.providerAccountId = '962300124567'
     }
   }
 

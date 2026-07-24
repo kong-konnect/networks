@@ -60,6 +60,9 @@ export interface Network {
   attachedGatewayCount: number
   connectionCount: number
   providerNetworkId?: string
+  // Kong's own cloud-provider account ID, surfaced so the customer can reference it
+  // when they share resources with Kong (e.g., an AWS RAM share).
+  providerAccountId?: string
   events?: NetworkEvent[]
   dnsConfigs?: DnsConfig[]
 }
