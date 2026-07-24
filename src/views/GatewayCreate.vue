@@ -55,13 +55,6 @@
 
         <footer class="step-footer">
           <KButton
-            appearance="tertiary"
-            data-testid="wizard-cancel-button"
-            @click="handleCancel"
-          >
-            Cancel
-          </KButton>
-          <KButton
             appearance="primary"
             :disabled="!controlPlaneName || creatingCp"
             data-testid="wizard-continue-button"
@@ -74,6 +67,13 @@
               decorative
             />
             {{ creatingCp ? 'Creating control plane…' : 'Create control plane' }}
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="wizard-cancel-button"
+            @click="handleCancel"
+          >
+            Cancel
           </KButton>
         </footer>
       </div>
@@ -137,29 +137,27 @@
 
         <footer class="step-footer">
           <KButton
+            appearance="primary"
+            :disabled="!dpType"
+            data-testid="wizard-next-button"
+            @click="onTypeNext"
+          >
+            Save and configure
+          </KButton>
+          <KButton
             appearance="tertiary"
             data-testid="wizard-back-button"
             @click="goBackFromType"
           >
             Back
           </KButton>
-          <div class="step-footer-end">
-            <KButton
-              appearance="tertiary"
-              data-testid="wizard-cancel-button"
-              @click="exitToOverview"
-            >
-              Exit
-            </KButton>
-            <KButton
-              appearance="primary"
-              :disabled="!dpType"
-              data-testid="wizard-next-button"
-              @click="onTypeNext"
-            >
-              Save and configure
-            </KButton>
-          </div>
+          <KButton
+            appearance="tertiary"
+            data-testid="wizard-cancel-button"
+            @click="exitToOverview"
+          >
+            Exit
+          </KButton>
         </footer>
       </div>
 
@@ -269,115 +267,14 @@
                 >
                   <KLabel>Select a network</KLabel>
                   <div class="network-box">
-                    <!-- Inline create-a-network form (opened by "Add new network") -->
-                    <div
-                      v-if="netForm.di === di"
-                      class="network-create-form"
-                      :data-testid="`network-create-form-${di}`"
-                    >
-                      <div class="form-group">
-                        <KLabel :required="true">Network name</KLabel>
-                        <KInput
-                          v-model.trim="netForm.name"
-                          data-testid="add-network-name"
-                          placeholder="Enter a unique name"
-                          width="100%"
-                        />
-                      </div>
-                      <div class="form-group">
-                        <KLabel :required="true">CIDR range</KLabel>
-                        <KInput
-                          v-model.trim="netForm.cidr"
-                          data-testid="add-network-cidr"
-                          placeholder="e.g., 10.0.0.0/16"
-                          width="100%"
-                        />
-                        <p class="cidr-permanent">
-                          <strong>The CIDR range is permanent.</strong> It can't be changed or resized after the network is created.
-                        </p>
-                        <KAlert
-                          v-if="netCidrWarning"
-                          appearance="warning"
-                          class="cidr-warning"
-                          data-testid="add-network-cidr-warning"
-                          :message="netCidrWarning"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        class="cidr-help-toggle"
-                        @click="netForm.showHelp = !netForm.showHelp"
+                    <div class="network-list">
+                      <p
+                        v-if="networksInRegion(deployment).length === 0"
+                        class="network-empty"
                       >
-                        <component :is="netForm.showHelp ? ChevronUpIcon : ChevronDownIcon" :size="KUI_ICON_SIZE_20" decorative />
-                        {{ netForm.showHelp ? 'Hide CIDR help' : 'Show CIDR help' }}
-                      </button>
-                      <div
-                        v-if="netForm.showHelp"
-                        class="cidr-help"
-                      >
-                        <p class="cidr-help-title">Notes when selecting your CIDR block:</p>
-                        <p>A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. To prevent conflicts, this CIDR block should not overlap with CIDR blocks assigned in your own Cloud Service Provider (CSP) networks.</p>
-                        <p class="cidr-help-subtitle">CIDR requirements</p>
-                        <ul>
-                          <li><strong>Prefix length:</strong> the CIDR block must have a prefix length between /16 and /23. /23 blocks are only supported up to 3 availability zones.</li>
-                          <li><strong>Private IP range:</strong> the entire CIDR block must fall within one of these private IP ranges: 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, 198.18.0.0/15.</li>
-                        </ul>
-                        <p class="cidr-help-subtitle">Restrictions</p>
-                        <ul>
-                          <li>Your CIDR block must not overlap with any IP ranges already in use by your organization. Overlapping ranges can prevent VPC peering from working correctly.</li>
-                          <li>It must not overlap with these reserved ranges: 10.100.0.0/16, 172.17.0.0/16.</li>
-                        </ul>
-                      </div>
-                      <div class="form-group">
-                        <KLabel
-                          :required="true"
-                          :tooltip="'Your network is deployed across these availability zones. Select at least 2 for resilience.'"
-                        >
-                          Select zone placements
-                        </KLabel>
-                        <div class="zone-box">
-                          <KCheckbox
-                            v-for="zone in regionZones(deployment.region)"
-                            :key="zone"
-                            :model-value="netForm.zones.includes(zone)"
-                            :data-testid="`zone-${di}-${zone}`"
-                            @update:model-value="toggleNetFormZone(zone)"
-                          >
-                            {{ zone }}
-                          </KCheckbox>
-                        </div>
-                        <p
-                          v-if="netForm.zones.length < 2"
-                          class="zone-error"
-                          data-testid="zone-error"
-                        >
-                          Select at least 2 zones.
-                        </p>
-                      </div>
-                      <div class="network-create-actions">
-                        <KButton
-                          appearance="primary"
-                          :disabled="!netForm.name || !netForm.cidr || netForm.zones.length < 2"
-                          data-testid="add-network-save"
-                          @click="saveNetForm(di)"
-                        >
-                          Save
-                        </KButton>
-                        <KButton
-                          appearance="tertiary"
-                          @click="cancelNetForm"
-                        >
-                          Cancel
-                        </KButton>
-                      </div>
-                    </div>
+                        No networks in this region yet — create one below.
+                      </p>
 
-                    <!-- Network list: all available networks as radio options, a divider,
-                         then "Create new network" (Konnect select-a-resource pattern) -->
-                    <div
-                      v-else
-                      class="network-list"
-                    >
                       <label
                         v-for="net in networksInRegion(deployment)"
                         :key="net.id"
@@ -395,21 +292,17 @@
                         >
                         <span class="network-opt-name">{{ net.name }}</span>
                         <span class="network-opt-cidr">{{ networkCidr(net, deployment.region) }}</span>
-                        <KBadge :appearance="networkStatusBadge(net.status)">
-                          <span class="network-opt-badge">
-                            <component :is="networkStatusIcon(net.status)" :size="KUI_ICON_SIZE_20" decorative />
-                            {{ networkStatusText(net.status) }}
-                          </span>
-                        </KBadge>
                       </label>
 
-                      <!-- A network the user just defined inline — not created yet; it's
-                           provisioned on submit, so it shows "New", never "Initializing". -->
+                      <hr class="network-divider">
+
+                      <!-- "Create a new network" is the last radio option; selecting it
+                           reveals the network fields inline. The network is created together
+                           with the data plane node when the form is submitted. -->
                       <label
-                        v-if="deployment.draftNetwork"
                         class="network-opt"
                         :class="{ selected: deployment.networkId === '__new__' }"
-                        :data-testid="`network-row-${di}-new`"
+                        :data-testid="`add-network-${di}`"
                       >
                         <input
                           v-model="deployment.networkId"
@@ -417,39 +310,94 @@
                           type="radio"
                           value="__new__"
                           :name="`network-${di}`"
+                          @change="selectNewNetwork(deployment)"
                         >
-                        <span class="network-opt-name">{{ deployment.draftNetwork.name }}</span>
-                        <span class="network-opt-cidr">{{ deployment.draftNetwork.cidr }}</span>
-                        <KBadge appearance="neutral">New</KBadge>
-                        <button
-                          type="button"
-                          class="network-opt-edit"
-                          :data-testid="`edit-network-${di}`"
-                          @click.prevent="startNetForm(di)"
-                        >
-                          Edit
-                        </button>
+                        <span class="network-opt-name">Create a new network</span>
                       </label>
 
-                      <p
-                        v-if="networksInRegion(deployment).length === 0 && !deployment.draftNetwork"
-                        class="network-empty"
+                      <div
+                        v-if="deployment.networkId === '__new__' && deployment.draftNetwork"
+                        class="new-network-fields"
+                        :data-testid="`network-create-form-${di}`"
                       >
-                        No networks in this region yet.
-                      </p>
-
-                      <hr class="network-divider">
-
-                      <button
-                        v-if="!deployment.draftNetwork"
-                        type="button"
-                        class="network-create-row"
-                        :data-testid="`add-network-${di}`"
-                        @click="startNetForm(di)"
-                      >
-                        <AddIcon :size="KUI_ICON_SIZE_20" decorative />
-                        Create new network
-                      </button>
+                        <div class="form-group">
+                          <KLabel :required="true">Network name</KLabel>
+                          <KInput
+                            v-model.trim="deployment.draftNetwork.name"
+                            data-testid="add-network-name"
+                            placeholder="e.g., production-us-east"
+                            width="100%"
+                          />
+                        </div>
+                        <div class="form-group">
+                          <KLabel :required="true">CIDR range</KLabel>
+                          <KInput
+                            v-model.trim="deployment.draftNetwork.cidr"
+                            data-testid="add-network-cidr"
+                            placeholder="e.g., 10.0.0.0/16"
+                            width="100%"
+                          />
+                          <p class="field-help">This range can't be changed after the network is created.</p>
+                          <p
+                            v-if="draftCidrWarning(deployment)"
+                            class="cidr-hint-warning"
+                            data-testid="add-network-cidr-warning"
+                          >
+                            {{ draftCidrWarning(deployment) }}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          class="cidr-help-toggle"
+                          @click="cidrHelpOpen[di] = !cidrHelpOpen[di]"
+                        >
+                          <component :is="cidrHelpOpen[di] ? ChevronUpIcon : ChevronDownIcon" :size="KUI_ICON_SIZE_20" decorative />
+                          {{ cidrHelpOpen[di] ? 'Hide CIDR help' : 'Show CIDR help' }}
+                        </button>
+                        <div
+                          v-if="cidrHelpOpen[di]"
+                          class="cidr-help"
+                        >
+                          <p class="cidr-help-title">Notes when selecting your CIDR block:</p>
+                          <p>A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. To prevent conflicts, this CIDR block should not overlap with CIDR blocks assigned in your own Cloud Service Provider (CSP) networks.</p>
+                          <p class="cidr-help-subtitle">CIDR requirements</p>
+                          <ul>
+                            <li><strong>Prefix length:</strong> the CIDR block must have a prefix length between /16 and /23. /23 blocks are only supported up to 3 availability zones.</li>
+                            <li><strong>Private IP range:</strong> the entire CIDR block must fall within one of these private IP ranges: 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, 198.18.0.0/15.</li>
+                          </ul>
+                          <p class="cidr-help-subtitle">Restrictions</p>
+                          <ul>
+                            <li>Your CIDR block must not overlap with any IP ranges already in use by your organization. Overlapping ranges can prevent VPC peering from working correctly.</li>
+                            <li>It must not overlap with these reserved ranges: 10.100.0.0/16, 172.17.0.0/16.</li>
+                          </ul>
+                        </div>
+                        <div class="form-group">
+                          <KLabel
+                            :required="true"
+                            :tooltip="'Your network is deployed across these availability zones. Select at least 2 for resilience.'"
+                          >
+                            Select zone placements
+                          </KLabel>
+                          <div class="zone-box">
+                            <KCheckbox
+                              v-for="zone in regionZones(deployment.region)"
+                              :key="zone"
+                              :model-value="deployment.draftNetwork.zones.includes(zone)"
+                              :data-testid="`zone-${di}-${zone}`"
+                              @update:model-value="toggleDraftZone(deployment, zone)"
+                            >
+                              {{ zone }}
+                            </KCheckbox>
+                          </div>
+                          <p
+                            v-if="deployment.draftNetwork.zones.length < 2"
+                            class="zone-error"
+                            data-testid="zone-error"
+                          >
+                            Select at least 2 zones.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -600,39 +548,35 @@
         </div>
 
         <footer class="step-footer">
-          <div class="step-footer-start">
-            <KButton
-              appearance="tertiary"
-              data-testid="wizard-back-button"
-              @click="step = 1"
-            >
-              Back
-            </KButton>
-            <KButton
-              appearance="tertiary"
-              data-testid="deploy-view-config"
-              @click="showConfigSlideout = true"
-            >
-              View configuration
-            </KButton>
-          </div>
-          <div class="step-footer-end">
-            <KButton
-              appearance="tertiary"
-              data-testid="wizard-cancel-button"
-              @click="exitToOverview"
-            >
-              Exit
-            </KButton>
-            <KButton
-              appearance="primary"
-              :disabled="!canReview"
-              data-testid="wizard-review-button"
-              @click="step = 3"
-            >
-              Review configurations
-            </KButton>
-          </div>
+          <KButton
+            appearance="primary"
+            :disabled="!canReview"
+            data-testid="wizard-review-button"
+            @click="step = 3"
+          >
+            Review configurations
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="wizard-back-button"
+            @click="step = 1"
+          >
+            Back
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="wizard-cancel-button"
+            @click="exitToOverview"
+          >
+            Exit
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="deploy-view-config"
+            @click="showConfigSlideout = true"
+          >
+            View configuration
+          </KButton>
         </footer>
       </div>
 
@@ -725,23 +669,6 @@
                   <dt>Zones</dt>
                   <dd>{{ deploymentNetwork(deployment).zones.join(', ') || '—' }}</dd>
                 </div>
-                <div class="summary-item">
-                  <dt>Network status</dt>
-                  <dd>
-                    <KBadge
-                      v-if="deploymentNetwork(deployment).isNew"
-                      appearance="neutral"
-                    >
-                      New — created on submit
-                    </KBadge>
-                    <KBadge
-                      v-else
-                      :appearance="networkStatusBadge(deploymentNetwork(deployment).status)"
-                    >
-                      {{ networkStatusText(deploymentNetwork(deployment).status) }}
-                    </KBadge>
-                  </dd>
-                </div>
               </template>
             </dl>
 
@@ -759,28 +686,26 @@
         </section>
 
         <footer class="step-footer">
-          <div class="step-footer-start">
-            <KButton
-              appearance="tertiary"
-              data-testid="wizard-back-button"
-              @click="step = 2"
-            >
-              Back
-            </KButton>
-            <KButton
-              appearance="tertiary"
-              data-testid="wizard-cancel-button"
-              @click="exitToOverview"
-            >
-              Exit
-            </KButton>
-          </div>
           <KButton
             appearance="primary"
             data-testid="runtimes-save-button"
             @click="finish({ name: 'gateway-overview' })"
           >
             Create data plane node
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="wizard-back-button"
+            @click="step = 2"
+          >
+            Back
+          </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="wizard-cancel-button"
+            @click="exitToOverview"
+          >
+            Exit
           </KButton>
         </footer>
       </div>
@@ -835,9 +760,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   ExternalLinkIcon,
-  CheckCircleIcon,
   ProgressIcon,
-  DangerCircleIcon,
   CloudIcon,
   RuntimeServerlessIcon,
   RuntimeDedicatedCloudIcon,
@@ -859,7 +782,6 @@ import {
   KLabel,
   KSelect,
   KCheckbox,
-  KBadge,
   KButton,
   KCodeBlock,
   KModal,
@@ -1125,68 +1047,47 @@ const scopeOptions = computed(() => [
 const cloudBadgeAppearance = (cloud: CloudProvider) =>
   cloud === 'aws' ? 'warning' : cloud === 'gcp' ? 'info' : cloud === 'azure' ? 'decorative-purple' : 'neutral'
 
-const networkStatusBadge = (status?: NetworkStatus): string =>
-  status === 'ready' ? 'success' : status === 'initialising' ? 'warning' : status === 'error' ? 'danger' : 'neutral'
-
-const networkStatusText = (status?: NetworkStatus): string =>
-  status === 'ready' ? 'Ready' : status === 'initialising' ? 'Initializing' : status === 'error' ? 'Error' : status === 'terminating' ? 'Deleting' : (status ?? '')
-
-const networkStatusTone = (status?: NetworkStatus): string =>
-  status === 'ready' ? 'success' : status === 'error' ? 'danger' : status === 'initialising' ? 'warning' : 'neutral'
-
-const networkStatusIcon = (status?: NetworkStatus): Component =>
-  status === 'ready' ? CheckCircleIcon : status === 'error' ? DangerCircleIcon : ProgressIcon
-
 const networkCidr = (net: Network, region: string) =>
   net.regions.find(r => r.region === region)?.cidr ?? net.regions[0]?.cidr ?? ''
 
 const gatewayCountLabel = (count: number) =>
   count === 1 ? '1 gateway' : `${count} gateways`
 
-// ── Inline "Add new network" form (per deployment; Figma node 48-8236) ───────────
-const netForm = reactive<{ di: number | null; name: string; cidr: string; showHelp: boolean; zones: string[] }>({
-  di: null,
-  name: '',
-  cidr: '',
-  showHelp: false,
-  zones: [],
-})
-const startNetForm = (di: number) => {
-  const d = deployments[di]
-  netForm.di = di
-  netForm.name = defaultNetworkName(d.provider, d.region)
-  netForm.cidr = ''
-  netForm.showHelp = false
-  // Zone placement is part of creating the network — default to all zones in the region.
-  netForm.zones = regionZones(d.region)
-}
-const cancelNetForm = () => { netForm.di = null }
-const toggleNetFormZone = (zone: string) => {
-  netForm.zones = netForm.zones.includes(zone)
-    ? netForm.zones.filter(z => z !== zone)
-    : [...netForm.zones, zone]
-}
-// Hold the inline network as a DRAFT — it isn't created until the wizard is submitted
-// (network + data plane node are provisioned together on submit), so it never shows an
-// "Initializing" state while the user is still filling in the form.
-const saveNetForm = (di: number) => {
-  const d = deployments[di]
-  if (!d || !netForm.name || !netForm.cidr) return
-  d.draftNetwork = { name: netForm.name, cidr: netForm.cidr, zones: [...netForm.zones] }
-  d.networkId = '__new__'
-  netForm.di = null
+// ── Inline "Create a new network" (per deployment) ───────────────────────────────
+// Selecting the "Create a new network" radio reveals the network fields inline and
+// stages a DRAFT on the deployment. The real network is created together with the data
+// plane node when the whole form is submitted (see finish()), matching how production
+// provisions the network + data plane node in one action — so nothing shows a misleading
+// "Initializing" state mid-form, and there's no separate "Save" step.
+const cidrHelpOpen = reactive<Record<number, boolean>>({})
+
+const selectNewNetwork = (deployment: Deployment) => {
+  if (!deployment.draftNetwork) {
+    deployment.draftNetwork = {
+      name: defaultNetworkName(deployment.provider, deployment.region),
+      cidr: '',
+      zones: regionZones(deployment.region),
+    }
+  }
 }
 
-// Non-blocking guidance mirroring the create-network form: small ranges can't be resized.
-const netCidrWarning = computed(() => {
-  const cidr = netForm.cidr.trim()
+const toggleDraftZone = (deployment: Deployment, zone: string) => {
+  if (!deployment.draftNetwork) return
+  deployment.draftNetwork.zones = deployment.draftNetwork.zones.includes(zone)
+    ? deployment.draftNetwork.zones.filter(z => z !== zone)
+    : [...deployment.draftNetwork.zones, zone]
+}
+
+// Non-blocking guidance: a small prefix (/22 or smaller) can't be resized later.
+const draftCidrWarning = (deployment: Deployment): string => {
+  const cidr = deployment.draftNetwork?.cidr.trim() ?? ''
   if (!cidr || !/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(cidr)) return ''
   const prefix = Number(cidr.split('/')[1])
   if (Number.isFinite(prefix) && prefix >= 22) {
     return 'This is a small range and can\'t be resized later. Choose a larger range (a lower prefix, such as /16 to /20) if you expect to scale.'
   }
   return ''
-})
+}
 
 // ── Step navigation / gating ──────────────────────────────────────────────────
 const onTypeNext = () => {
@@ -1204,7 +1105,7 @@ const canReview = computed(() =>
   deployments.every(d =>
     !!d.provider && !!d.region && (
       d.networkId === '__new__'
-        ? !!d.draftNetwork
+        ? !!d.draftNetwork && !!d.draftNetwork.name && !!d.draftNetwork.cidr && d.draftNetwork.zones.length >= 2
         : (!!d.networkId && !!store.getNetworkById(d.networkId))
     ),
   ),
@@ -1783,29 +1684,9 @@ const finish = (destination: { name: string }) => {
   font-weight: $kui-font-weight-semibold;
 }
 
-// CIDR takes the remaining space so the status badge (and Edit) sit at the right edge.
 .network-opt-cidr {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-20;
-  margin-right: auto;
-}
-
-.network-opt-badge {
-  align-items: center;
-  display: inline-flex;
-  gap: $kui-space-20;
-}
-
-.network-opt-edit {
-  background: none;
-  border: none;
-  color: $kui-color-text-primary;
-  cursor: pointer;
-  font-size: $kui-font-size-20;
-  font-weight: $kui-font-weight-semibold;
-  padding: $kui-space-0;
-
-  &:hover { text-decoration: underline; }
 }
 
 .network-empty {
@@ -1822,40 +1703,19 @@ const finish = (destination: { name: string }) => {
   width: 100%;
 }
 
-.network-create-row {
-  align-items: center;
-  align-self: flex-start;
-  background: none;
-  border: none;
-  color: $kui-color-text-primary;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: $kui-font-size-30;
-  font-weight: $kui-font-weight-semibold;
-  gap: $kui-space-20;
-  padding: $kui-space-0;
-
-  &:hover { text-decoration: underline; }
-}
-
-// Inline create-a-network form
-.network-create-form {
+// The new-network fields appear inline under the "Create a new network" radio.
+.new-network-fields {
   display: flex;
   flex-direction: column;
   gap: $kui-space-50;
+  padding: $kui-space-40 $kui-space-30 $kui-space-30;
 }
 
-.cidr-permanent {
-  color: $kui-color-text-neutral;
+.cidr-hint-warning {
+  color: $kui-color-text-warning;
   font-size: $kui-font-size-20;
   line-height: $kui-line-height-30;
   margin: $kui-space-0;
-
-  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
-}
-
-.cidr-warning {
-  margin-top: $kui-space-30;
 }
 
 .cidr-help-toggle {
@@ -1897,11 +1757,6 @@ const finish = (destination: { name: string }) => {
     color: $kui-color-text;
     font-weight: $kui-font-weight-semibold;
   }
-}
-
-.network-create-actions {
-  display: flex;
-  gap: $kui-space-40;
 }
 
 .config-layout {
@@ -2185,6 +2040,9 @@ const finish = (destination: { name: string }) => {
 }
 
 // ── Step footer ─────────────────────────────────────────────────────────────
+// Footer matches the create-network reference: left-aligned, PRIMARY action first,
+// then Back / Exit / View configuration. Keeping the primary out of the bottom-right
+// corner (and Exit away from it) prevents accidental Exit clicks.
 .step-footer {
   align-items: center;
   background-color: $kui-color-background;
@@ -2193,15 +2051,10 @@ const finish = (destination: { name: string }) => {
   border-top: $kui-border-width-10 solid $kui-color-border;
   bottom: 0;
   display: flex;
-  justify-content: space-between;
+  gap: $kui-space-40;
+  justify-content: flex-start;
   margin: $kui-space-0 calc(#{$kui-space-80} * -1);
   padding: $kui-space-60 $kui-space-80;
   position: sticky;
-}
-
-.step-footer-end,
-.step-footer-start {
-  display: flex;
-  gap: $kui-space-40;
 }
 </style>

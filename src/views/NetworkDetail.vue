@@ -174,10 +174,6 @@
               <span class="prov-check-status">{{ provStatusLabel(s) }}</span>
             </li>
           </ul>
-          <p class="prov-note">
-            <InfoIcon :size="KUI_ICON_SIZE_20" decorative />
-            Approving resources in your cloud account happens later, only if you set up private connectivity — it isn't needed to provision the network.
-          </p>
         </section>
 
         <!-- Prototype device: skip the 45-min provisioning wait. Intentionally low-prominence. -->
@@ -1163,17 +1159,6 @@ const confirmDelete = () => {
   .prov-check-row--awaiting & { color: $kui-color-text-warning; font-weight: $kui-font-weight-semibold; }
 }
 
-.prov-note {
-  align-items: flex-start;
-  color: $kui-color-text-neutral;
-  display: flex;
-  font-size: $kui-font-size-30;
-  gap: $kui-space-30;
-  line-height: $kui-line-height-40;
-  margin: $kui-space-0;
-
-  svg { flex: 0 0 auto; margin-top: $kui-space-10; }
-}
 
 .section-header {
   align-items: flex-start;

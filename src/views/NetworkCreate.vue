@@ -105,16 +105,14 @@
               :error-message="cidrError"
               @update:model-value="validateCidr"
             />
-            <p class="cidr-permanent" data-testid="cidr-permanent">
-              <strong>The CIDR range is permanent.</strong> It can't be changed or resized after the network is created, so choose a range large enough for future growth.
-            </p>
-            <KAlert
+            <p class="field-help" data-testid="cidr-permanent">This range can't be changed after the network is created, so choose one large enough for future growth.</p>
+            <p
               v-if="cidrWarning"
-              appearance="warning"
-              class="cidr-warning"
+              class="cidr-hint-warning"
               data-testid="cidr-warning"
-              :message="cidrWarning"
-            />
+            >
+              {{ cidrWarning }}
+            </p>
           </div>
         </div>
 
@@ -696,17 +694,11 @@ const handleCreate = () => {
   margin: $kui-space-0;
 }
 
-.cidr-permanent {
-  color: $kui-color-text-neutral;
+.cidr-hint-warning {
+  color: $kui-color-text-warning;
   font-size: $kui-font-size-30;
   line-height: $kui-line-height-40;
   margin: $kui-space-0;
-
-  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
-}
-
-.cidr-warning {
-  margin-top: $kui-space-30;
 }
 
 .two-col {
