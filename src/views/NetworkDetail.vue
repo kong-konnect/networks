@@ -479,6 +479,7 @@
           :gateways="gateways"
           :dns-configs="dnsList"
           :services="servicePaths"
+          :directional="isDirectional"
         />
       </div>
 

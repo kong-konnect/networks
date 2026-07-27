@@ -184,6 +184,9 @@ import {
   connectionTypeLabel,
   statusLabel as connStatusLabel,
   nextActionText,
+  directionCategory,
+  directionCategoryLabel,
+  type DirectionCategory,
 } from '@/utils/connectionDisplay'
 
 const props = withDefaults(defineProps<{
@@ -192,10 +195,14 @@ const props = withDefaults(defineProps<{
   gateways?: Gateway[]
   dnsConfigs?: DnsConfig[]
   services?: ServicePath[]
+  // Prototype-only "by direction" variant: split the connectivity branch into
+  // Client → Kong / Kong → upstream / Bidirectional sub-branches.
+  directional?: boolean
 }>(), {
   gateways: () => [],
   dnsConfigs: () => [],
   services: () => [],
+  directional: false,
 })
 
 type Tone = 'ready' | 'pending' | 'error'
@@ -257,20 +264,26 @@ interface TreeItem {
 }
 interface TreeGroup { key: string; label: string; items: TreeItem[] }
 
-const openGroups = ref<Record<string, boolean>>({ gateways: true, connectivity: true, dns: true })
+// One connectivity connection → a tree item (with its "reaches {target}" sub-line).
+const connectivityItemFor = (c: Connection): TreeItem => {
+  const svc = props.services.find(s => s.connectionId === c.id)
+  return {
+    id: `conn-${c.id}`, name: c.name, statusLabel: connStatusLabel(c.status), tone: connTone(c.status),
+    sub: svc ? { text: `reaches ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
+  }
+}
+
+const openGroups = ref<Record<string, boolean>>({
+  gateways: true, connectivity: true, dns: true,
+  'conn-client-to-kong': true, 'conn-kong-to-upstream': true, 'conn-bidirectional': true,
+})
 const toggleGroup = (k: string) => { openGroups.value[k] = !openGroups.value[k] }
 
 const allGroups = computed<TreeGroup[]>(() => {
   const gateways: TreeItem[] = props.gateways.map(g => ({
     id: `gw-${g.id}`, name: g.name, statusLabel: 'Ready', tone: 'ready',
   }))
-  const connectivity: TreeItem[] = props.connections.map(c => {
-    const svc = props.services.find(s => s.connectionId === c.id)
-    return {
-      id: `conn-${c.id}`, name: c.name, statusLabel: connStatusLabel(c.status), tone: connTone(c.status),
-      sub: svc ? { text: `reaches ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
-    }
-  })
+  const connectivity: TreeItem[] = props.connections.map(connectivityItemFor)
   const dns: TreeItem[] = props.dnsConfigs.map(d => {
     const svc = props.services.find(s => s.dnsConfigId === d.id)
     const conn = svc ? connById(svc.connectionId) : undefined
@@ -279,9 +292,25 @@ const allGroups = computed<TreeGroup[]>(() => {
       sub: svc && conn ? { text: `via ${conn.name} → ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
     }
   })
+
+  // Directional variant: split the single connectivity branch into per-direction
+  // sub-branches (empty directions are dropped). Peering is bidirectional; resource
+  // endpoints are one-way, so the tree makes the flow explicit.
+  const connectivityGroups: TreeGroup[] = props.directional
+    ? (['client-to-kong', 'kong-to-upstream', 'bidirectional'] as DirectionCategory[])
+        .map(cat => ({
+          key: `conn-${cat}`,
+          label: `Private connectivity · ${directionCategoryLabel[cat]}`,
+          items: props.connections
+            .filter(c => directionCategory(c) === cat)
+            .map(c => connectivityItemFor(c)),
+        }))
+        .filter(g => g.items.length > 0)
+    : [{ key: 'connectivity', label: 'Private connectivity', items: connectivity }]
+
   return [
     { key: 'gateways', label: 'Gateways', items: gateways },
-    { key: 'connectivity', label: 'Private connectivity', items: connectivity },
+    ...connectivityGroups,
     { key: 'dns', label: 'Private DNS', items: dns },
   ]
 })
