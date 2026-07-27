@@ -33,6 +33,29 @@ export const directionLabel = (conn: Pick<Connection, 'type' | 'direction'>): st
   return 'Kong → upstream'
 }
 
+// ── Directional variant (prototype compare only) ────────────────────────────────
+// Splits a connection into who initiates the traffic. Peering is genuinely two-way;
+// resource endpoints (REP) and private endpoints are one-way. Used only by the
+// "by direction" connectivity variant, never by the shipped unified view.
+export type DirectionCategory = 'client-to-kong' | 'kong-to-upstream' | 'bidirectional'
+
+export const directionCategory = (conn: Pick<Connection, 'type' | 'direction'>): DirectionCategory => {
+  if (peeringTypes.includes(conn.type)) return 'bidirectional'
+  return conn.direction === 'ingress' ? 'client-to-kong' : 'kong-to-upstream'
+}
+
+export const directionCategoryLabel: Record<DirectionCategory, string> = {
+  'client-to-kong': 'Client → Kong',
+  'kong-to-upstream': 'Kong → upstream',
+  bidirectional: 'Bidirectional',
+}
+
+export const directionCategoryHelp: Record<DirectionCategory, string> = {
+  'client-to-kong': 'Clients in your network reach the gateway.',
+  'kong-to-upstream': 'The gateway reaches your upstream services. Resource endpoints only work in this direction.',
+  bidirectional: 'Traffic can flow either way — typical of network peering.',
+}
+
 // Scope label mapping.
 export const scopeLabel = (conn: Pick<Connection, 'type' | 'scope'>): string => {
   if (conn.scope === 'network-level') return 'Network-level'

@@ -23,7 +23,46 @@
       description="Only connection methods supported by this network are shown."
       data-testid="method-chooser"
     >
-      <div class="method-list" role="radiogroup" aria-label="Connection method">
+      <!-- Directional variant (prototype compare): methods grouped by traffic direction -->
+      <template v-if="isDirectional">
+        <div
+          v-for="group in methodGroups"
+          :key="group.key"
+          class="method-group"
+          :data-testid="`method-group-${group.key}`"
+        >
+          <div class="method-group-head">
+            <span class="method-group-title">{{ group.label }}</span>
+            <span class="method-group-help">{{ group.help }}</span>
+          </div>
+          <div class="method-list" role="radiogroup" :aria-label="group.label">
+            <label
+              v-for="method in group.methods"
+              :key="method.type"
+              class="method-card"
+              :class="{ selected: selectedType === method.type }"
+              :data-testid="`method-${method.type}`"
+            >
+              <input
+                v-model="selectedType"
+                type="radio"
+                :value="method.type"
+                class="method-input"
+                name="connection-method"
+              >
+              <div class="method-body">
+                <span class="method-name">{{ method.label }}</span>
+                <span class="method-usewhen">{{ method.useWhen }}</span>
+                <div class="method-tags">
+                  <span class="method-tag method-tag--dim">{{ method.scope }}</span>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </template>
+
+      <div v-else class="method-list" role="radiogroup" aria-label="Connection method">
         <label
           v-for="method in methods"
           :key="method.type"
@@ -156,6 +195,7 @@ import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityFormBlock from '@/components/EntityFormBlock.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { directionCategory, directionCategoryLabel, directionCategoryHelp } from '@/utils/connectionDisplay'
 import type { CloudProvider, ConnectionType, ConnectionFamily, ConnectionDirection } from '@/types'
 
 const route = useRoute()
@@ -315,6 +355,21 @@ const methods = computed<Method[]>(() =>
 const selectedMethod = computed<Method | undefined>(() =>
   methods.value.find(m => m.type === selectedType.value),
 )
+
+// Directional variant (prototype compare): group the methods by traffic direction so the
+// one-way nature of resource endpoints (Kong → upstream only) is explicit.
+const isDirectional = computed(() => store.connectivityView.value === 'directional')
+const methodGroups = computed(() => {
+  const order = ['client-to-kong', 'kong-to-upstream', 'bidirectional'] as const
+  return order
+    .map(key => ({
+      key,
+      label: directionCategoryLabel[key],
+      help: directionCategoryHelp[key],
+      methods: methods.value.filter(m => directionCategory({ type: m.type, direction: m.dir }) === key),
+    }))
+    .filter(g => g.methods.length)
+})
 
 // Every private connection needs a step the customer takes in THEIR cloud account —
 // Kong can't detect it, so we surface the steps + require an acknowledgement before
@@ -534,6 +589,32 @@ const handleSubmit = async () => {
   .context-value {
     font-size: $kui-font-size-30;
   }
+}
+
+.method-group {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-40;
+
+  & + & { margin-top: $kui-space-70; }
+}
+
+.method-group-head {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-10;
+}
+
+.method-group-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-40;
+  font-weight: $kui-font-weight-semibold;
+}
+
+.method-group-help {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
 }
 
 .method-list {

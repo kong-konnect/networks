@@ -215,6 +215,8 @@ import {
   statusBadgeAppearance,
   ownerLabel,
   timeAgo,
+  directionCategory,
+  directionCategoryLabel,
 } from '@/utils/connectionDisplay'
 
 const route = useRoute()
@@ -263,18 +265,24 @@ const setupRows = computed(() => {
 const detailCollections = computed(() => {
   if (!connection.value || !network.value) return []
   const r = network.value.regions[0]
-  return [
-    {
-      items: [
-        { key: 'type', label: 'Type', value: connectionTypeLabel(connection.value.type), type: 'plain' as const },
-        { key: 'scope', label: 'Scope', value: scopeLabel(connection.value), type: 'plain' as const },
-        { key: 'network', label: 'Network', value: network.value.name, type: 'plain' as const },
-        { key: 'provider', label: 'Provider', value: connection.value.cloud.toUpperCase(), type: 'plain' as const },
-        { key: 'region', label: 'Region', value: r.region, type: 'plain' as const },
-        { key: 'owner', label: 'Owner', value: ownerLabel(connection.value), type: 'plain' as const },
-      ],
-    },
+  const items = [
+    { key: 'type', label: 'Type', value: connectionTypeLabel(connection.value.type), type: 'plain' as const },
+    { key: 'scope', label: 'Scope', value: scopeLabel(connection.value), type: 'plain' as const },
+    { key: 'network', label: 'Network', value: network.value.name, type: 'plain' as const },
+    { key: 'provider', label: 'Provider', value: connection.value.cloud.toUpperCase(), type: 'plain' as const },
+    { key: 'region', label: 'Region', value: r.region, type: 'plain' as const },
+    { key: 'owner', label: 'Owner', value: ownerLabel(connection.value), type: 'plain' as const },
   ]
+  // Directional variant only: surface which way traffic flows.
+  if (store.connectivityView.value === 'directional') {
+    items.splice(1, 0, {
+      key: 'direction',
+      label: 'Direction',
+      value: directionCategoryLabel[directionCategory(connection.value)],
+      type: 'plain' as const,
+    })
+  }
+  return [{ items }]
 })
 
 const customerSetupCopy = computed(() => {

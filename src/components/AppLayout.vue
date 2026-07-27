@@ -32,6 +32,8 @@
 
   <!-- Prototype-only Day 1 / Day n state device (floating tab, top-center) -->
   <DayModeSwitcher />
+  <!-- Prototype-only connectivity-view compare device (stacked below Day 1 / Day n) -->
+  <VariantSwitcher />
 </template>
 
 <script setup lang="ts">
@@ -40,6 +42,7 @@ import Sidebar from './Sidebar.vue'
 import LegacyNavbar from './LegacyNavbar.vue'
 import LegacySidebar from './LegacySidebar.vue'
 import DayModeSwitcher from './DayModeSwitcher.vue'
+import VariantSwitcher from './VariantSwitcher.vue'
 import { useNavVersion } from '@/composables'
 
 const { isNewNav } = useNavVersion()

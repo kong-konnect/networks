@@ -390,6 +390,15 @@ const servicePaths = ref<ServicePath[]>(initialServicePaths)
 const dayMode = ref<'day-1' | 'day-n'>('day-n')
 const sessionCreatedIds = ref<Set<string>>(new Set())
 
+// Prototype-only "connectivity view" device — a design exploration to compare the
+// current unified private-connectivity view against a "by direction" variant that splits
+// connections into Client → Kong / Kong → upstream (per eng feedback: REP is Kong→upstream
+// only, and customers wrongly assume connectivity is bidirectional). Not a product concept.
+// 'unified' = the shipped behaviour (unchanged); 'directional' = the compare variant.
+const connectivityView = ref<'unified' | 'directional'>('unified')
+const getConnectivityView = () => connectivityView.value
+const setConnectivityView = (mode: 'unified' | 'directional') => { connectivityView.value = mode }
+
 // Configuration captured by the gateway-creation wizard, surfaced on the
 // control-plane overview after creation (so captured config isn't thrown away).
 export interface GatewayConfig {
@@ -640,6 +649,9 @@ export function useNetworksStore() {
     dayMode,
     getDayMode,
     setDayMode,
+    connectivityView,
+    getConnectivityView,
+    setConnectivityView,
     markNetworkReady,
     createNetwork,
     deleteNetwork,

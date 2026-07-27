@@ -316,6 +316,15 @@
               <h3 class="numbered-title">Private connectivity</h3>
               <p class="section-help">{{ connections.length }} connection{{ connections.length === 1 ? '' : 's' }} on this network.</p>
             </div>
+            <div
+              v-if="isDirectional && directionBreakdown.length"
+              class="dir-breakdown"
+              data-testid="connectivity-direction-breakdown"
+            >
+              <span v-for="b in directionBreakdown" :key="b.key" class="dir-chip">
+                <strong>{{ b.count }}</strong> {{ b.label }}
+              </span>
+            </div>
             <div v-if="connectivityAttention.count" class="attention-strip" data-testid="connectivity-attention">
               <KBadge appearance="warning">Needs attention</KBadge>
               <span class="attention-text">{{ connectivityAttention.label }}</span>
@@ -495,6 +504,13 @@
           message="Add a connection to let clients reach Kong, let Kong reach upstreams, or connect private networks."
           action-button-text="Add connection"
           @click-action="goToAddConnection"
+        />
+
+        <!-- Directional variant (prototype compare) — connections grouped by direction -->
+        <ConnectivityDirectionView
+          v-else-if="isDirectional"
+          :network-id="networkId"
+          :connections="connections"
         />
 
         <div
@@ -696,6 +712,7 @@ import {
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
+import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
@@ -704,6 +721,8 @@ import {
   statusLabel,
   statusBadgeAppearance,
   timeAgo,
+  directionCategory,
+  directionCategoryLabel,
 } from '@/utils/connectionDisplay'
 
 const route = useRoute()
@@ -718,6 +737,21 @@ const servicePaths = computed(() => store.getServicePathsByNetworkId(networkId.v
 
 const activeTab = ref('#overview')
 const showNextStep = ref(true)
+
+// Prototype-only "by direction" connectivity variant (compare with the shipped unified
+// view). Reactive so toggling the floating switcher updates the view live.
+const isDirectional = computed(() => store.connectivityView.value === 'directional')
+
+const directionBreakdown = computed(() => {
+  const order = ['client-to-kong', 'kong-to-upstream', 'bidirectional'] as const
+  return order
+    .map(key => ({
+      key,
+      label: directionCategoryLabel[key],
+      count: connections.value.filter(c => directionCategory(c) === key).length,
+    }))
+    .filter(b => b.count > 0)
+})
 const showDeleteModal = ref(false)
 const showBlockedModal = ref(false)
 
@@ -1193,6 +1227,23 @@ const confirmDelete = () => {
 
 // ── Light data tables ───────────────────────────────────────────────────────
 // Attention strip — pale-warning summary of actionable items above a card's table.
+.dir-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $kui-space-30 $kui-space-40;
+  margin-bottom: $kui-space-50;
+}
+
+.dir-chip {
+  background-color: $kui-color-background-neutral-weakest;
+  border-radius: $kui-border-radius-20;
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  padding: $kui-space-20 $kui-space-40;
+
+  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
+}
+
 .attention-strip {
   align-items: center;
   background-color: $kui-color-background-warning-weakest;
