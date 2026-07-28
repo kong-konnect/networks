@@ -30,10 +30,9 @@
     </main>
   </div>
 
-  <!-- Prototype-only Day 1 / Day n state device (floating tab, top-center) -->
-  <DayModeSwitcher />
-  <!-- Prototype-only connectivity-view compare device (stacked below Day 1 / Day n) -->
-  <VariantSwitcher />
+  <!-- Prototype-only meta-controls (Day 1 / Day n, connectivity view) — one dockable
+       panel, bottom-left. Not a product control. -->
+  <PrototypeControls />
 </template>
 
 <script setup lang="ts">
@@ -41,8 +40,7 @@ import Navbar from './Navbar.vue'
 import Sidebar from './Sidebar.vue'
 import LegacyNavbar from './LegacyNavbar.vue'
 import LegacySidebar from './LegacySidebar.vue'
-import DayModeSwitcher from './DayModeSwitcher.vue'
-import VariantSwitcher from './VariantSwitcher.vue'
+import PrototypeControls from './PrototypeControls.vue'
 import { useNavVersion } from '@/composables'
 
 const { isNewNav } = useNavVersion()
