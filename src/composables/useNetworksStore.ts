@@ -375,6 +375,22 @@ const initialServicePaths: ServicePath[] = [
     connectionId: 'conn-7',
     target: { name: 'ml-api.internal', address: 'pending', status: 'pending' },
   },
+  // Scale: a single connection (internal-upstreams / conn-7) fronts many private
+  // upstreams — real networks have tens to hundreds. These prove the system map
+  // stays legible: the healthy majority collapses into one aggregate node.
+  ...Array.from({ length: 23 }, (_, i): ServicePath => {
+    const n = String(i + 1).padStart(2, '0')
+    return {
+      id: `svc-bulk-${n}`,
+      networkId: 'net-1',
+      name: `checkout-worker-${n}`,
+      gatewayName: 'prod-gateway-us-east-1',
+      upstream: `svc-${n}.internal.company.com`,
+      dnsConfigId: 'dns-1',
+      connectionId: 'conn-7',
+      target: { name: `svc-${n}-api.internal`, address: `10.80.${20 + i}.10`, status: 'reachable' },
+    }
+  }),
 ]
 
 // ── Singleton store ─────────────────────────────────────────────────────────

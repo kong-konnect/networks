@@ -123,6 +123,24 @@
           <KBadge :appearance="toneAppearance(selectedNode.tone)">{{ selectedNode.statusLabel }}</KBadge>
         </div>
 
+        <!-- Aggregated targets → a scannable list (this is where scale lives), no tabs -->
+        <template v-if="selectedNode.kind === 'aggregate'">
+          <section class="dsec">
+            <span class="dsec-label">Behind {{ selectedNode.parentName }}</span>
+            <ul class="dimpact">
+              <li v-for="mem in (selectedNode.members || [])" :key="mem.name" class="dimpact-row">
+                <span class="fnode-dot" :class="`fnode-dot--${mem.tone}`" />
+                <span class="dimpact-text">
+                  <span class="dimpact-name">{{ mem.name }}</span>
+                  <span class="dimpact-meta">{{ mem.meta }}</span>
+                </span>
+                <KBadge :appearance="toneAppearance(mem.tone)">{{ mem.statusLabel }}</KBadge>
+              </li>
+            </ul>
+          </section>
+        </template>
+
+        <template v-else>
         <div v-if="detailTabs.length > 1" class="dtabs" role="tablist">
           <button
             v-for="t in detailTabs"
@@ -212,6 +230,7 @@
           </template>
           <p v-else class="dempty">This node isn’t on a single traced path.</p>
         </div>
+        </template>
       </div>
     </KSlideout>
   </div>
@@ -232,6 +251,7 @@ import {
   WorldPrivateIcon,
   RuntimeDedicatedCloudIcon,
   LocationIcon,
+  StackIcon,
 } from '@kong/icons'
 import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
@@ -267,8 +287,9 @@ const router = useRouter()
 const networkId = computed(() => props.network.id)
 
 type Tone = 'ready' | 'pending' | 'error'
-type Kind = 'gateway' | 'network' | 'connectivity' | 'dns' | 'target'
+type Kind = 'gateway' | 'network' | 'connectivity' | 'dns' | 'target' | 'aggregate'
 type DetailTab = 'details' | 'impact' | 'path'
+interface AggMember { name: string; meta: string; tone: Tone; statusLabel: string }
 
 const tones: Tone[] = ['ready', 'pending', 'error']
 const focusProblems = ref(false)
@@ -306,6 +327,8 @@ interface FNode {
   tone: Tone
   statusLabel: string
   dir?: DirectionCategory
+  members?: AggMember[]
+  parentName?: string
   x: number
   y: number
   w: number
@@ -330,24 +353,49 @@ const layout = computed<{ nodes: FNode[]; edges: FEdge[]; width: number; height:
   const dnsNodes: FNode[] = props.dnsConfigs.map(d =>
     mk(`dns-${d.id}`, 'dns', d.name, dnsTypeLabel(d.type), dnsTone(d.status), dnsStatusLabel(d.status)))
 
-  const targetMap = new Map<string, { node: FNode; conns: Set<string> }>()
-  for (const s of props.services) {
-    const key = s.target.name
-    const tone = targetToneOf(s.target.status)
-    if (!targetMap.has(key)) {
-      targetMap.set(key, {
-        node: mk(`target-${key}`, 'target', s.target.name, s.target.address, tone, targetStatusLabel(s.target.status)),
-        conns: new Set(),
-      })
-    }
-    const entry = targetMap.get(key)!
-    entry.node.tone = worstTone([entry.node.tone, tone])
-    entry.node.statusLabel = targetStatusLabel(s.target.status)
-    entry.conns.add(s.connectionId)
-  }
-  const targetNodes = [...targetMap.values()].map(t => t.node)
+  // Targets grouped by the connection that reaches them, then AGGREGATED so the
+  // tier never becomes a hairball at scale: problem targets stay individual (up
+  // to a cap), the healthy majority collapses into one aggregate node per
+  // connection. A single connection fronting 200 upstreams is one green node.
+  const MAX_INDIVIDUAL = 4
+  const toneLabel = (t: Tone) => t === 'error' ? 'Unreachable' : t === 'pending' ? 'Pending' : 'Reachable'
+  const connName = (cid: string) => props.connections.find(c => c.id === cid)?.name ?? cid
+  const targetTier: FNode[] = []
+  const targetEdges: Array<{ from: string; to: string }> = []
 
-  const rawTiers: FNode[][] = [gwNodes, [hub], [...connNodes, ...dnsNodes], targetNodes]
+  const perConn = new Map<string, Map<string, { name: string; address: string; tone: Tone }>>()
+  for (const s of props.services) {
+    if (!perConn.has(s.connectionId)) perConn.set(s.connectionId, new Map())
+    const m = perConn.get(s.connectionId)!
+    const tone = targetToneOf(s.target.status)
+    const existing = m.get(s.target.name)
+    if (!existing) m.set(s.target.name, { name: s.target.name, address: s.target.address, tone })
+    else existing.tone = worstTone([existing.tone, tone])
+  }
+
+  for (const [cid, m] of perConn) {
+    const items = [...m.values()]
+    const problems = items.filter(t => t.tone !== 'ready')
+    const healthy = items.filter(t => t.tone === 'ready')
+    const addIndiv = (t: { name: string; address: string; tone: Tone }) => {
+      const n = mk(`target-${cid}-${t.name}`, 'target', t.name, t.address, t.tone, toneLabel(t.tone))
+      targetTier.push(n)
+      targetEdges.push({ from: `conn-${cid}`, to: n.id })
+    }
+    const addAgg = (list: typeof items, tone: Tone, label: string, suffix: string) => {
+      const n = mk(`agg-${cid}-${suffix}`, 'aggregate', `${list.length} targets`, label, tone, label)
+      n.members = list.map(t => ({ name: t.name, meta: t.address, tone: t.tone, statusLabel: toneLabel(t.tone) }))
+      n.parentName = connName(cid)
+      targetTier.push(n)
+      targetEdges.push({ from: `conn-${cid}`, to: n.id })
+    }
+    if (problems.length <= MAX_INDIVIDUAL) problems.forEach(addIndiv)
+    else { problems.slice(0, MAX_INDIVIDUAL).forEach(addIndiv); addAgg(problems.slice(MAX_INDIVIDUAL), worstTone(problems.map(p => p.tone)), 'Need attention', 'issues') }
+    if (healthy.length <= 2) healthy.forEach(addIndiv)
+    else addAgg(healthy, 'ready', 'All reachable', 'ok')
+  }
+
+  const rawTiers: FNode[][] = [gwNodes, [hub], [...connNodes, ...dnsNodes], targetTier]
   const tiers = rawTiers.filter(t => t.length > 0)
 
   const tierHeight = (t: FNode[]) => t.reduce((sum, n) => sum + n.h, 0) + Math.max(0, t.length - 1) * ROW_GAP
@@ -378,11 +426,10 @@ const layout = computed<{ nodes: FNode[]; edges: FEdge[]; width: number; height:
   for (const g of gwNodes) edges.push(edge(g, hub))
   for (const c of connNodes) edges.push(edge(hub, c))
   for (const d of dnsNodes) edges.push(edge(hub, d))
-  for (const t of targetMap.values()) {
-    for (const connId of t.conns) {
-      const cn = byId.get(`conn-${connId}`)
-      if (cn) edges.push(edge(cn, t.node))
-    }
+  for (const te of targetEdges) {
+    const from = byId.get(te.from)
+    const to = byId.get(te.to)
+    if (from && to) edges.push(edge(from, to))
   }
 
   return { nodes: tiers.flat(), edges, width, height }
@@ -454,6 +501,7 @@ const kindIcon = (kind: Kind) => ({
   connectivity: ConnectionsIcon,
   dns: WorldPrivateIcon,
   target: LocationIcon,
+  aggregate: StackIcon,
 }[kind])
 const kindLabel = (kind: Kind) => ({
   gateway: 'Gateway',
@@ -461,6 +509,7 @@ const kindLabel = (kind: Kind) => ({
   connectivity: 'Connectivity',
   dns: 'Private DNS',
   target: 'Private target',
+  aggregate: 'Private targets',
 }[kind])
 const nodeStyle = (n: FNode) => ({ left: `${n.x}px`, top: `${n.y}px`, width: `${n.w}px`, height: `${n.h}px` })
 
@@ -850,6 +899,18 @@ watch(() => [layout.value.width, layout.value.height], () => nextTick(fit))
     border-color: $kui-color-border-primary-weak;
   }
   &--dim { opacity: 0.4; }
+
+  // Aggregate node — a "stack" of cards to signal it represents many.
+  &--aggregate::after {
+    background-color: $kui-color-background;
+    border: $kui-border-width-10 solid $kui-color-border;
+    border-radius: inherit;
+    content: '';
+    inset: 0;
+    position: absolute;
+    transform: translate($kui-space-20, $kui-space-20);
+    z-index: -1;
+  }
 }
 
 .fnode-ic {
@@ -867,6 +928,7 @@ watch(() => [layout.value.width, layout.value.height], () => nextTick(fit))
   &--connectivity { background-color: $kui-color-background-decorative-aqua-weakest; color: $kui-color-text-decorative-aqua; }
   &--dns { background-color: $kui-color-background-neutral-weakest; color: $kui-color-text-decorative-pink; }
   &--target { background-color: $kui-color-background-neutral-weak; color: $kui-color-text-neutral-strong; }
+  &--aggregate { background-color: $kui-color-background-neutral-weak; color: $kui-color-text-neutral-strong; }
 }
 
 .fnode-text { display: flex; flex-direction: column; gap: 1px; margin-right: auto; min-width: 0; overflow: hidden; }
