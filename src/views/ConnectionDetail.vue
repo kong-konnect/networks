@@ -79,22 +79,17 @@
       <template #title>Pending customer action</template>
     </KAlert>
 
-    <!-- KAi remediation when this connection isn't healthy -->
-    <div v-if="connection.status !== 'ready' && !kai.shown.value" class="kai-inline-trigger">
-      <KButton appearance="tertiary" class="kai-summarize-link" data-testid="conn-kai" @click="kai.run()">
-        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
-        Explain with KAi
-      </KButton>
-    </div>
+    <!-- KAi remediation when this connection isn't healthy — compact, one-liner by default -->
     <KaiSummaryCard
-      v-if="kai.shown.value"
-      :loading="kai.loading.value"
+      v-if="connection.status !== 'ready' && kaiOpen"
       title="What KAi found"
       :insights="kaiInsights"
+      :one-liner="kaiOneLiner"
       :actions="kaiActions"
+      initial-collapsed
       data-testid="conn-kai-card"
       @action="onKaiAction"
-      @close="kai.close()"
+      @close="kaiOpen = false"
     />
 
     <!-- Details -->
@@ -109,22 +104,19 @@
       data-testid="conn-private-dns"
     >
       <p class="dns-ref">Private DNS resolved through this connection.</p>
-      <table class="rows-table">
-        <thead>
-          <tr>
-            <th>Name / domain</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="dns in relatedDns" :key="dns.id">
-            <td class="details-cell">{{ dns.name }}</td>
-            <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
-            <td><a class="row-action" href="#" @click.prevent="viewDns(dns.id)">View</a></td>
-          </tr>
-        </tbody>
-      </table>
+      <DetailTable
+        :columns="relatedDnsColumns"
+        :rows="relatedDns"
+        clickable
+        @row-click="(row) => viewDns(row.id)"
+      >
+        <template #cell-name="{ row }">
+          <a class="row-link" href="#" @click.prevent.stop="viewDns(row.id)">{{ row.name }}</a>
+        </template>
+        <template #cell-status="{ row }">
+          <KBadge :appearance="dnsStatusBadge(row.status)">{{ dnsStatusLabel(row.status) }}</KBadge>
+        </template>
+      </DetailTable>
     </KCard>
 
     <!-- Setup values -->
@@ -165,25 +157,12 @@
 
     <!-- Events -->
     <KCard ref="eventsCardRef" title="Events">
-      <table class="rows-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Event</th>
-            <th>Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(ev, idx) in (connection.events || [])" :key="idx">
-            <td>{{ timeAgo(ev.time) }}</td>
-            <td class="details-cell">{{ ev.event }}</td>
-            <td><KBadge :appearance="resultBadge(ev.result)">{{ ev.result }}</KBadge></td>
-          </tr>
-          <tr v-if="!connection.events || connection.events.length === 0">
-            <td colspan="3" class="dash">No events recorded.</td>
-          </tr>
-        </tbody>
-      </table>
+      <DetailTable v-if="(connection.events || []).length" :columns="eventColumns" :rows="connection.events || []" row-key="time">
+        <template #cell-time="{ row }"><span class="cell-muted">{{ timeAgo(row.time) }}</span></template>
+        <template #cell-event="{ row }">{{ row.event }}</template>
+        <template #cell-result="{ row }"><KBadge :appearance="resultBadge(row.result)">{{ row.result }}</KBadge></template>
+      </DetailTable>
+      <p v-else class="dash">No events recorded.</p>
     </KCard>
     </div>
   </PageLayout>
@@ -211,8 +190,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CopyIcon, ChevronDownIcon, SparklesIcon } from '@kong/icons'
-import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
+import { CopyIcon, ChevronDownIcon } from '@kong/icons'
 import {
   KAlert,
   KBadge,
@@ -226,10 +204,11 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
+import DetailTable from '@/components/DetailTable.vue'
+import type { DetailColumn } from '@/components/DetailTable.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import { useKaiPanel } from '@/composables/useKaiPanel'
 import {
   connectionTypeLabel,
   scopeLabel,
@@ -342,8 +321,25 @@ const copySetupValues = () => {
   copyToClipboard(text)
 }
 
+const relatedDnsColumns: DetailColumn[] = [
+  { key: 'name', label: 'Name / domain' },
+  { key: 'status', label: 'Status' },
+]
+const eventColumns: DetailColumn[] = [
+  { key: 'time', label: 'Time' },
+  { key: 'event', label: 'Event' },
+  { key: 'result', label: 'Result' },
+]
+
 // ── KAi remediation (when this connection isn't healthy) ──────────────────────
-const kai = useKaiPanel(900)
+const kaiOpen = ref(true)
+const kaiOneLiner = computed(() => {
+  const c = connection.value
+  if (!c) return ''
+  if (c.status === 'error') return `${c.name} has an error — ${c.errorMessage || 'the target isn\'t reachable'}.`
+  if (isPending.value) return `${c.name} is waiting on your customer-side setup to activate.`
+  return `${c.name} is still being set up. No action needed yet.`
+})
 const kaiInsights = computed<KaiInsight[]>(() => {
   const c = connection.value
   if (!c) return []

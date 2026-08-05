@@ -135,12 +135,14 @@ const props = withDefaults(defineProps<{
   oneLiner?: string
   loading?: boolean
   timeLabel?: string
+  initialCollapsed?: boolean
 }>(), {
   insights: () => [],
   actions: () => [],
   oneLiner: '',
   loading: false,
   timeLabel: 'just now',
+  initialCollapsed: false,
 })
 
 defineEmits<{
@@ -148,7 +150,7 @@ defineEmits<{
   (e: 'close'): void
 }>()
 
-const collapsed = ref(false)
+const collapsed = ref(props.initialCollapsed)
 const feedback = ref<'up' | 'down' | null>(null)
 const setFeedback = (v: 'up' | 'down') => { feedback.value = feedback.value === v ? null : v }
 

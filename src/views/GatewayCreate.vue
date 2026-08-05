@@ -53,7 +53,7 @@
           </div>
         </section>
 
-        <footer class="step-footer">
+        <WizardFooter>
           <KButton
             appearance="primary"
             :disabled="!controlPlaneName || creatingCp"
@@ -69,13 +69,13 @@
             {{ creatingCp ? 'Creating control plane…' : 'Create control plane' }}
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-cancel-button"
             @click="handleCancel"
           >
             Cancel
           </KButton>
-        </footer>
+        </WizardFooter>
       </div>
 
       <!-- ── STEP 1 — Data plane type ───────────────────────────────────── -->
@@ -135,7 +135,7 @@
           </div>
         </section>
 
-        <footer class="step-footer">
+        <WizardFooter>
           <KButton
             appearance="primary"
             :disabled="!dpType"
@@ -145,20 +145,20 @@
             Save and configure
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-back-button"
             @click="goBackFromType"
           >
             Back
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-cancel-button"
             @click="exitToOverview"
           >
             Exit
           </KButton>
-        </footer>
+        </WizardFooter>
       </div>
 
       <!-- ── STEP 2 — Data plane nodes ──────────────────────────────────── -->
@@ -296,30 +296,36 @@
 
                       <hr class="network-divider">
 
-                      <!-- "Create a new network" is the last radio option; selecting it
-                           reveals the network fields inline. The network is created together
+                      <!-- "Create a new network" is an action, not a selectable option. It
+                           reveals the network fields inline; the network is created together
                            with the data plane node when the form is submitted. -->
-                      <label
-                        class="network-opt"
-                        :class="{ selected: deployment.networkId === '__new__' }"
+                      <button
+                        v-if="deployment.networkId !== '__new__'"
+                        type="button"
+                        class="network-create-btn"
                         :data-testid="`add-network-${di}`"
+                        @click="selectNewNetwork(deployment)"
                       >
-                        <input
-                          v-model="deployment.networkId"
-                          class="network-opt-input"
-                          type="radio"
-                          value="__new__"
-                          :name="`network-${di}`"
-                          @change="selectNewNetwork(deployment)"
-                        >
-                        <span class="network-opt-name">Create a new network</span>
-                      </label>
+                        <AddIcon :size="KUI_ICON_SIZE_20" decorative />
+                        Create a new network
+                      </button>
 
                       <div
                         v-if="deployment.networkId === '__new__' && deployment.draftNetwork"
                         class="new-network-fields"
                         :data-testid="`network-create-form-${di}`"
                       >
+                        <div class="new-network-head">
+                          <span class="new-network-title">New network</span>
+                          <button
+                            type="button"
+                            class="network-cancel-new"
+                            :data-testid="`cancel-new-network-${di}`"
+                            @click="cancelNewNetwork(deployment)"
+                          >
+                            Use an existing network instead
+                          </button>
+                        </div>
                         <div class="form-group">
                           <KLabel :required="true">Network name</KLabel>
                           <KInput
@@ -547,7 +553,7 @@
           </section>
         </div>
 
-        <footer class="step-footer">
+        <WizardFooter>
           <KButton
             appearance="primary"
             :disabled="!canReview"
@@ -557,27 +563,29 @@
             Review configurations
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-back-button"
             @click="step = 1"
           >
             Back
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-cancel-button"
             @click="exitToOverview"
           >
             Exit
           </KButton>
-          <KButton
-            appearance="tertiary"
-            data-testid="deploy-view-config"
-            @click="showConfigSlideout = true"
-          >
-            View configuration
-          </KButton>
-        </footer>
+          <template #aux>
+            <KButton
+              appearance="tertiary"
+              data-testid="deploy-view-config"
+              @click="showConfigSlideout = true"
+            >
+              View configuration
+            </KButton>
+          </template>
+        </WizardFooter>
       </div>
 
       <!-- ── STEP 3 — Review ────────────────────────────────────────────── -->
@@ -685,7 +693,7 @@
           </section>
         </section>
 
-        <footer class="step-footer">
+        <WizardFooter>
           <KButton
             appearance="primary"
             data-testid="runtimes-save-button"
@@ -694,20 +702,20 @@
             Create data plane node
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-back-button"
             @click="step = 2"
           >
             Back
           </KButton>
           <KButton
-            appearance="tertiary"
+            appearance="secondary"
             data-testid="wizard-cancel-button"
             @click="exitToOverview"
           >
             Exit
           </KButton>
-        </footer>
+        </WizardFooter>
       </div>
     </div>
 
@@ -788,6 +796,7 @@ import {
   KStepper,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
+import WizardFooter from '@/components/WizardFooter.vue'
 import ExplainerPanel from '@/components/GatewayExplainerPanel.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
@@ -1062,6 +1071,7 @@ const gatewayCountLabel = (count: number) =>
 const cidrHelpOpen = reactive<Record<number, boolean>>({})
 
 const selectNewNetwork = (deployment: Deployment) => {
+  deployment.networkId = '__new__'
   if (!deployment.draftNetwork) {
     deployment.draftNetwork = {
       name: defaultNetworkName(deployment.provider, deployment.region),
@@ -1069,6 +1079,12 @@ const selectNewNetwork = (deployment: Deployment) => {
       zones: regionZones(deployment.region),
     }
   }
+}
+
+// Leave the "create new network" flow and go back to picking an existing network.
+const cancelNewNetwork = (deployment: Deployment) => {
+  deployment.draftNetwork = undefined
+  deployment.networkId = defaultNetworkId(deployment)
 }
 
 const toggleDraftZone = (deployment: Deployment, zone: string) => {
@@ -1783,6 +1799,62 @@ const finish = (destination: { name: string }) => {
   font-size: $kui-font-size-30;
   gap: $kui-space-20;
   text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+// Inline doc link (icon stays on the same line as the text).
+.config-docs-link {
+  align-items: center;
+  color: $kui-color-text-primary;
+  display: inline-flex;
+  gap: $kui-space-20;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover { text-decoration: underline; }
+}
+
+// Purple sparkle on the header "Configure with KAi" action.
+.kai-header-action :deep(svg) { color: $kui-color-text-decorative-purple; }
+
+// "Create a new network" action button + inline new-network form header.
+.network-create-btn {
+  align-items: center;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: $kui-color-text-primary;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  padding: $kui-space-0;
+
+  &:hover { text-decoration: underline; }
+}
+
+.new-network-head {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-50;
+  justify-content: space-between;
+}
+
+.new-network-title {
+  color: $kui-color-text;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+}
+
+.network-cancel-new {
+  background: none;
+  border: none;
+  color: $kui-color-text-primary;
+  cursor: pointer;
+  font-size: $kui-font-size-20;
+  padding: $kui-space-0;
 
   &:hover { text-decoration: underline; }
 }

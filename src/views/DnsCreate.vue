@@ -5,32 +5,32 @@
     title="Add private DNS"
     :back-to="{ name: 'networks-detail', params: { id: networkId } }"
   >
+    <template #actions>
+      <KButton
+        v-if="!kaiCfg.shown.value"
+        appearance="tertiary"
+        class="kai-header-action"
+        data-testid="dns-kai-configure"
+        @click="kaiCfg.run()"
+      >
+        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+        Configure with KAi
+      </KButton>
+    </template>
+
     <div class="dns-create">
       <div class="create-layout">
         <div class="create-main">
-          <!-- Context banner + KAi setup assist -->
-          <div class="context-row-wrap">
-            <KCard class="context-banner">
-              <div class="context-row">
-                <span class="context-label">Network</span>
-                <span class="context-value">{{ network.name }}</span>
-              </div>
-              <div class="context-row">
-                <span class="context-label">Cloud</span>
-                <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
-              </div>
-            </KCard>
-            <button
-              v-if="!kaiCfg.shown.value"
-              type="button"
-              class="kai-configure-link"
-              data-testid="dns-kai-configure"
-              @click="kaiCfg.run()"
-            >
-              <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
-              Configure with KAi
-            </button>
-          </div>
+          <KCard class="context-banner">
+            <div class="context-row">
+              <span class="context-label">Network</span>
+              <span class="context-value">{{ network.name }}</span>
+            </div>
+            <div class="context-row">
+              <span class="context-label">Cloud</span>
+              <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
+            </div>
+          </KCard>
 
           <KaiSummaryCard
             v-if="kaiCfg.shown.value"
@@ -85,7 +85,7 @@
             </div>
           </section>
 
-          <footer class="create-footer">
+          <WizardFooter>
             <KButton
               appearance="primary"
               :disabled="!canCreate || isSubmitting"
@@ -101,13 +101,13 @@
               {{ isSubmitting ? 'Adding…' : 'Add private DNS' }}
             </KButton>
             <KButton
-              appearance="tertiary"
+              appearance="secondary"
               data-testid="dns-cancel"
               @click="goBack"
             >
               Cancel
             </KButton>
-          </footer>
+          </WizardFooter>
         </div>
 
         <div class="side-rail">
@@ -157,6 +157,7 @@ import {
   ToastManager,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
+import WizardFooter from '@/components/WizardFooter.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'

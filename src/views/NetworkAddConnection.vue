@@ -4,29 +4,29 @@
     title="Add connection"
     :breadcrumbs="breadcrumbs"
   >
-    <!-- Context banner + KAi setup assist -->
-    <div class="context-row-wrap">
-      <KCard class="context-banner">
-        <div class="context-row">
-          <span class="context-label">Selected network</span>
-          <span class="context-value">{{ network.name }}</span>
-        </div>
-        <div class="context-row">
-          <span class="context-label">Cloud</span>
-          <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
-        </div>
-      </KCard>
-      <button
+    <template #actions>
+      <KButton
         v-if="!kaiShown"
-        type="button"
-        class="kai-configure-link"
+        appearance="tertiary"
+        class="kai-header-action"
         data-testid="kai-configure"
         @click="runKaiConfigure"
       >
         <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
         Configure with KAi
-      </button>
-    </div>
+      </KButton>
+    </template>
+
+    <KCard class="context-banner">
+      <div class="context-row">
+        <span class="context-label">Selected network</span>
+        <span class="context-value">{{ network.name }}</span>
+      </div>
+      <div class="context-row">
+        <span class="context-label">Cloud</span>
+        <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
+      </div>
+    </KCard>
 
     <KaiSummaryCard
       v-if="kaiShown"
@@ -177,8 +177,7 @@
       </template>
     </EntityFormBlock>
 
-    <!-- Footer -->
-    <div class="step-actions">
+    <WizardFooter>
       <KButton
         appearance="primary"
         :disabled="!selectedMethod || !form.name.trim() || isSubmitting || (!!prerequisite && !acknowledged)"
@@ -187,8 +186,8 @@
       >
         Create connection
       </KButton>
-      <KButton appearance="tertiary" @click="cancel">Cancel</KButton>
-    </div>
+      <KButton appearance="secondary" @click="cancel">Cancel</KButton>
+    </WizardFooter>
   </PageLayout>
 
   <div v-else class="not-found">
@@ -217,6 +216,7 @@ import {
 import { ExternalLinkIcon, SparklesIcon } from '@kong/icons'
 import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import PageLayout from '@/components/PageLayout.vue'
+import WizardFooter from '@/components/WizardFooter.vue'
 import EntityFormBlock from '@/components/EntityFormBlock.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'

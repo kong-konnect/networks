@@ -205,31 +205,22 @@
      <div class="nd-body">
       <KTabs v-model="activeTab" :tabs="tabs" />
 
+      <!-- KAi network summary — shown on every tab, collapsed to a one-liner by default -->
+      <KaiSummaryCard
+        v-if="kaiShown"
+        class="nd-kai"
+        title="Network health summary"
+        :insights="kaiInsights"
+        :one-liner="kaiOneLiner"
+        :actions="kaiActions"
+        initial-collapsed
+        data-testid="kai-network-summary"
+        @action="onKaiAction"
+        @close="kaiShown = false"
+      />
+
       <!-- ── Overview tab ─────────────────────────────────────── -->
       <div v-if="activeTab === '#overview'" class="tab-content">
-        <!-- KAi whole-network summary -->
-        <div v-if="!kaiShown" class="kai-inline-trigger">
-          <KButton
-            appearance="tertiary"
-            class="kai-summarize-link"
-            data-testid="kai-summarize-overview"
-            @click="runKaiSummary"
-          >
-            <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
-            Summarize this network with KAi
-          </KButton>
-        </div>
-        <KaiSummaryCard
-          v-if="kaiShown"
-          :loading="kaiLoading"
-          title="Network health summary"
-          :insights="kaiInsights"
-          :one-liner="kaiOneLiner"
-          :actions="kaiActions"
-          data-testid="kai-overview-summary"
-          @action="onKaiAction"
-          @close="kaiShown = false"
-        />
 
         <!-- Next steps (conditional) — surfaced first so the primary action is up top -->
         <section
@@ -356,41 +347,24 @@
                 <strong>{{ b.count }}</strong> {{ b.label }}
               </span>
             </div>
-            <div v-if="connectivityAttention.count" class="attention-strip" data-testid="connectivity-attention">
-              <KBadge appearance="warning">Needs attention</KBadge>
-              <span class="attention-text">{{ connectivityAttention.label }}</span>
-              <a class="attention-cta" href="#" @click.prevent="viewTab('#connectivity')">
-                Review connections
-                <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
-              </a>
-            </div>
-            <table v-if="connections.length" class="rows-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Last checked</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="conn in connections"
-                  :key="conn.id"
-                  class="clickable-row"
-                  @click="goToConnection(conn.id)"
-                >
-                  <td>
-                    <a class="row-link" href="#" @click.prevent.stop="goToConnection(conn.id)">{{ conn.name }}</a>
-                  </td>
-                  <td>{{ connectionTypeLabel(conn.type) }}</td>
-                  <td><KBadge :appearance="statusBadgeAppearance(conn.status)">{{ statusLabel(conn.status) }}</KBadge></td>
-                  <td class="checked-cell">{{ conn.lastCheckedAt ? timeAgo(conn.lastCheckedAt) : '—' }}</td>
-                  <td><a class="row-action" href="#" @click.prevent.stop="goToConnection(conn.id)">View</a></td>
-                </tr>
-              </tbody>
-            </table>
+            <DetailTable
+              v-if="connections.length"
+              :columns="connectivityColumns"
+              :rows="connections"
+              clickable
+              @row-click="(row) => goToConnection(row.id)"
+            >
+              <template #cell-name="{ row }">
+                <a class="row-link" href="#" @click.prevent.stop="goToConnection(row.id)">{{ row.name }}</a>
+              </template>
+              <template #cell-type="{ row }">{{ connectionTypeLabel(row.type) }}</template>
+              <template #cell-status="{ row }">
+                <KBadge :appearance="statusBadgeAppearance(row.status)">{{ statusLabel(row.status) }}</KBadge>
+              </template>
+              <template #cell-lastChecked="{ row }">
+                <span class="cell-muted">{{ row.lastCheckedAt ? timeAgo(row.lastCheckedAt) : '—' }}</span>
+              </template>
+            </DetailTable>
             <div v-else class="card-empty">
               <span class="card-empty-icon"><ConnectionsIcon :size="KUI_ICON_SIZE_30" decorative /></span>
               <h4 class="card-empty-title">No private connectivity yet</h4>
@@ -410,41 +384,24 @@
               <h3 class="numbered-title">Private DNS</h3>
               <p class="section-help">{{ dnsList.length }} configuration{{ dnsList.length === 1 ? '' : 's' }} on this network.</p>
             </div>
-            <div v-if="dnsAttention.count" class="attention-strip" data-testid="dns-attention">
-              <KBadge appearance="warning">Needs attention</KBadge>
-              <span class="attention-text">{{ dnsAttention.label }}</span>
-              <a class="attention-cta" href="#" @click.prevent="viewTab('#dns')">
-                Review DNS
-                <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
-              </a>
-            </div>
-            <table v-if="dnsList.length" class="rows-table">
-              <thead>
-                <tr>
-                  <th>Domain</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Last checked</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="dns in dnsList"
-                  :key="dns.id"
-                  class="clickable-row"
-                  @click="goToDns(dns.id)"
-                >
-                  <td>
-                    <a class="row-link" href="#" @click.prevent.stop="goToDns(dns.id)">{{ dns.name }}</a>
-                  </td>
-                  <td>{{ dnsTypeLabel(dns.type) }}</td>
-                  <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
-                  <td class="checked-cell">{{ dns.lastCheckedAt ? timeAgo(dns.lastCheckedAt) : '—' }}</td>
-                  <td><a class="row-action" href="#" @click.prevent.stop="goToDns(dns.id)">View</a></td>
-                </tr>
-              </tbody>
-            </table>
+            <DetailTable
+              v-if="dnsList.length"
+              :columns="dnsColumns"
+              :rows="dnsList"
+              clickable
+              @row-click="(row) => goToDns(row.id)"
+            >
+              <template #cell-name="{ row }">
+                <a class="row-link" href="#" @click.prevent.stop="goToDns(row.id)">{{ row.name }}</a>
+              </template>
+              <template #cell-type="{ row }">{{ dnsTypeLabel(row.type) }}</template>
+              <template #cell-status="{ row }">
+                <KBadge :appearance="dnsStatusBadge(row.status)">{{ dnsStatusLabel(row.status) }}</KBadge>
+              </template>
+              <template #cell-lastChecked="{ row }">
+                <span class="cell-muted">{{ row.lastCheckedAt ? timeAgo(row.lastCheckedAt) : '—' }}</span>
+              </template>
+            </DetailTable>
             <div v-else class="card-empty">
               <span class="card-empty-icon"><WorldPrivateIcon :size="KUI_ICON_SIZE_30" decorative /></span>
               <h4 class="card-empty-title">No private DNS yet</h4>
@@ -466,33 +423,21 @@
             <h3 class="numbered-title">Attached gateways</h3>
             <p class="section-help">Gateways currently using this network.</p>
           </div>
-          <table v-if="usedByRows.length" class="rows-table">
-            <thead>
-              <tr>
-                <th>Gateway</th>
-                <th>Type</th>
-                <th>Control plane ID</th>
-                <th>Data plane group</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="gw in usedByRows"
-                :key="gw.id"
-                class="clickable-row"
-                @click="goToGateway(gw)"
-              >
-                <td>
-                  <a class="row-link" href="#" @click.prevent.stop="goToGateway(gw)">{{ gw.name }}</a>
-                </td>
-                <td>{{ gw.type }}</td>
-                <td><KCopy format="short" :text="gw.controlPlaneId" @click.stop /></td>
-                <td><KCopy format="short" :text="gw.dataPlaneGroup" @click.stop /></td>
-                <td><KBadge appearance="success">Ready</KBadge></td>
-              </tr>
-            </tbody>
-          </table>
+          <DetailTable
+            v-if="usedByRows.length"
+            :columns="gatewayColumns"
+            :rows="usedByRows"
+            clickable
+            @row-click="(row) => goToGateway(row)"
+          >
+            <template #cell-name="{ row }">
+              <a class="row-link" href="#" @click.prevent.stop="goToGateway(row)">{{ row.name }}</a>
+            </template>
+            <template #cell-type="{ row }">{{ row.type }}</template>
+            <template #cell-controlPlaneId="{ row }"><KCopy format="short" :text="row.controlPlaneId" @click.stop /></template>
+            <template #cell-dataPlaneGroup="{ row }"><KCopy format="short" :text="row.dataPlaneGroup" @click.stop /></template>
+            <template #cell-status="{ row }"><KBadge appearance="success">{{ row.status || 'Ready' }}</KBadge></template>
+          </DetailTable>
           <p v-else class="section-help gw-empty">No gateways are using this network yet.</p>
         </section>
 
@@ -500,34 +445,10 @@
 
       <!-- ── Communication tab ────────────────────────────────── -->
       <div v-if="activeTab === '#communication'" class="tab-content">
-        <div class="section-header">
-          <div class="section-header-text">
-            <h2 class="section-title">System map</h2>
-            <p class="section-help">How this network is used by gateways, DNS, and connectivity resources. Opens on what needs attention.</p>
-          </div>
-          <KButton
-            v-if="!kaiShown"
-            appearance="secondary"
-            class="kai-summarize-btn"
-            data-testid="kai-summarize"
-            @click="runKaiSummary"
-          >
-            <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
-            Summarize with KAi
-          </KButton>
+        <div class="section-header-text">
+          <h2 class="section-title">System map</h2>
+          <p class="section-help">How this network is used by gateways, DNS, and connectivity resources. Opens on what needs attention.</p>
         </div>
-
-        <KaiSummaryCard
-          v-if="kaiShown"
-          :loading="kaiLoading"
-          title="Network health summary"
-          :insights="kaiInsights"
-          :one-liner="kaiOneLiner"
-          :actions="kaiActions"
-          data-testid="kai-network-summary"
-          @action="onKaiAction"
-          @close="kaiShown = false"
-        />
 
         <NetworkCommunicationMap
           :network="network"
@@ -574,27 +495,23 @@
           v-else
           class="detail-card table-card"
         >
-          <EntityBaseTable
-            :key="'conn-table'"
-            :fetcher="connectionsFetcher"
-            :headers="connectionHeaders"
-            hide-card
-            :hide-toolbar="true"
-            table-preferences-key="network-connections"
-            @row:click="(_e: Event, row: any) => goToConnection(row.id)"
+          <DetailTable
+            :columns="connectivityColumns"
+            :rows="connections"
+            clickable
+            @row-click="(row) => goToConnection(row.id)"
           >
-            <template #name="{ row }">
-              <span class="conn-name">{{ row.name }}</span>
+            <template #cell-name="{ row }">
+              <a class="row-link" href="#" @click.prevent.stop="goToConnection(row.id)">{{ row.name }}</a>
             </template>
-            <template #type="{ row }">{{ connectionTypeLabel(row.type) }}</template>
-            <template #status="{ row }">
+            <template #cell-type="{ row }">{{ connectionTypeLabel(row.type) }}</template>
+            <template #cell-status="{ row }">
               <KBadge :appearance="statusBadgeAppearance(row.status)">{{ statusLabel(row.status) }}</KBadge>
             </template>
-            <template #lastChecked="{ row }">{{ row.lastCheckedAt ? timeAgo(row.lastCheckedAt) : '—' }}</template>
-            <template #actions="{ row }">
-              <a class="row-action" href="#" @click.prevent="goToConnection(row.id)">View</a>
+            <template #cell-lastChecked="{ row }">
+              <span class="cell-muted">{{ row.lastCheckedAt ? timeAgo(row.lastCheckedAt) : '—' }}</span>
             </template>
-          </EntityBaseTable>
+          </DetailTable>
         </div>
       </div>
 
@@ -616,33 +533,23 @@
         </div>
 
         <div v-if="dnsList.length" class="detail-card table-card">
-          <table class="rows-table">
-            <thead>
-              <tr>
-                <th>Domain</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Last checked</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="dns in dnsList"
-                :key="dns.id"
-                class="clickable-row"
-                @click="goToDns(dns.id)"
-              >
-                <td>
-                  <a class="row-link" href="#" @click.prevent.stop="goToDns(dns.id)">{{ dns.name }}</a>
-                </td>
-                <td>{{ dnsTypeLabel(dns.type) }}</td>
-                <td><KBadge :appearance="dnsStatusBadge(dns.status)">{{ dnsStatusLabel(dns.status) }}</KBadge></td>
-                <td class="checked-cell">{{ dns.lastCheckedAt ? timeAgo(dns.lastCheckedAt) : '—' }}</td>
-                <td><a class="row-action" href="#" @click.prevent.stop="goToDns(dns.id)">View</a></td>
-              </tr>
-            </tbody>
-          </table>
+          <DetailTable
+            :columns="dnsColumns"
+            :rows="dnsList"
+            clickable
+            @row-click="(row) => goToDns(row.id)"
+          >
+            <template #cell-name="{ row }">
+              <a class="row-link" href="#" @click.prevent.stop="goToDns(row.id)">{{ row.name }}</a>
+            </template>
+            <template #cell-type="{ row }">{{ dnsTypeLabel(row.type) }}</template>
+            <template #cell-status="{ row }">
+              <KBadge :appearance="dnsStatusBadge(row.status)">{{ dnsStatusLabel(row.status) }}</KBadge>
+            </template>
+            <template #cell-lastChecked="{ row }">
+              <span class="cell-muted">{{ row.lastCheckedAt ? timeAgo(row.lastCheckedAt) : '—' }}</span>
+            </template>
+          </DetailTable>
         </div>
         <KEmptyState
           v-else
@@ -703,24 +610,11 @@
       This network has {{ network?.attachedGatewayCount }} gateway{{ (network?.attachedGatewayCount ?? 0) === 1 ? '' : 's' }} attached.
       Detach the gateways before deleting this network.
     </p>
-    <table class="rows-table">
-      <thead>
-        <tr>
-          <th>Gateway</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="gw in gateways" :key="gw.id">
-          <td>{{ gw.name }}</td>
-          <td>Data plane</td>
-          <td><KBadge appearance="success">Running</KBadge></td>
-          <td><a class="row-action" href="#" @click.prevent>View</a></td>
-        </tr>
-      </tbody>
-    </table>
+    <DetailTable :columns="blockedGatewayColumns" :rows="gateways">
+      <template #cell-name="{ row }">{{ row.name }}</template>
+      <template #cell-type>Data plane</template>
+      <template #cell-status><KBadge appearance="success">Running</KBadge></template>
+    </DetailTable>
   </KModal>
 
 </template>
@@ -742,7 +636,6 @@ import {
   InfoIcon,
   NotificationOutlineIcon,
   ProgressIcon,
-  SparklesIcon,
   AwsIcon,
   GoogleCloudIcon,
   AzureIcon,
@@ -768,7 +661,8 @@ import {
   KTooltip,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
-import EntityBaseTable from '@/components/EntityBaseTable.vue'
+import DetailTable from '@/components/DetailTable.vue'
+import type { DetailColumn } from '@/components/DetailTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
@@ -814,11 +708,9 @@ const directionBreakdown = computed(() => {
 })
 
 // ── KAi contextual summary (prototype) ────────────────────────────────────────
-// A "Summarize with KAi" entry on the Communication tab produces an insight card whose
-// content is derived from the network's ACTUAL problem state (not a static blob), plus
-// suggested next actions that deep-link into the relevant view.
-const kaiShown = ref(false)
-const kaiLoading = ref(false)
+// One network-health card, shown across every tab collapsed to a one-liner (expandable).
+// Content is derived from the network's ACTUAL problem state, with actions that deep-link.
+const kaiShown = ref(true)
 
 const kaiProblems = computed(() => ({
   dnsErr: dnsList.value.filter(d => d.status === 'error'),
@@ -863,13 +755,6 @@ const kaiActions = computed<KaiAction[]>(() => {
   actions.push({ key: 'ask', label: 'Ask KAi about this' })
   return actions
 })
-
-const runKaiSummary = () => {
-  kaiShown.value = true
-  kaiLoading.value = true
-  // Brief "summarizing…" state, mirroring the product's streaming summary.
-  window.setTimeout(() => { kaiLoading.value = false }, 1100)
-}
 
 // Reassurance shown while the network is provisioning.
 const kaiInitInsights = computed<KaiInsight[]>(() => [
@@ -998,14 +883,32 @@ const tabs = [
   { hash: '#dns', title: 'Private DNS' },
 ]
 
-// Connectivity: table columns are deliberately minimal — direction and scope were
-// removed (peering is bidirectional, so direction is misleading; scope isn't useful yet).
-const connectionHeaders = [
-  { label: 'Name', key: 'name', sortable: true },
-  { label: 'Type', key: 'type', sortable: false },
-  { label: 'Status', key: 'status', sortable: false },
-  { label: 'Last checked', key: 'lastChecked', sortable: false },
-  { label: 'Action', key: 'actions', sortable: false },
+// Column configs for the shared DetailTable — one set reused by the Overview summaries
+// AND their full tabs, so the tables match across the whole detail flow. No Action column;
+// rows are clickable.
+const connectivityColumns: DetailColumn[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'type', label: 'Type' },
+  { key: 'status', label: 'Status' },
+  { key: 'lastChecked', label: 'Last checked' },
+]
+const dnsColumns: DetailColumn[] = [
+  { key: 'name', label: 'Domain' },
+  { key: 'type', label: 'Type' },
+  { key: 'status', label: 'Status' },
+  { key: 'lastChecked', label: 'Last checked' },
+]
+const gatewayColumns: DetailColumn[] = [
+  { key: 'name', label: 'Gateway' },
+  { key: 'type', label: 'Type' },
+  { key: 'controlPlaneId', label: 'Control plane ID' },
+  { key: 'dataPlaneGroup', label: 'Data plane group' },
+  { key: 'status', label: 'Status' },
+]
+const blockedGatewayColumns: DetailColumn[] = [
+  { key: 'name', label: 'Gateway' },
+  { key: 'type', label: 'Type' },
+  { key: 'status', label: 'Status' },
 ]
 
 // Provisioning checklist for the initializing state. Each step is owned by either
@@ -1029,6 +932,8 @@ function provStatusLabel(s: { owner: ProvOwner; state: ProvState }): string {
 }
 
 const dnsList = computed(() => network.value?.dnsConfigs ?? [])
+
+const viewTab = (hash: string) => { activeTab.value = hash }
 
 // ── View configuration (config-as-code on demand) ────────────────────────────
 const showConfigSlideout = ref(false)
@@ -1105,13 +1010,6 @@ const dnsAttention = computed(() => {
   return { count: pending + error, label: parts.join(' · ') }
 })
 
-const viewTab = (hash: string) => { activeTab.value = hash }
-
-const connectionsFetcher = async () => {
-  await new Promise(resolve => setTimeout(resolve, 100))
-  const data = store.getConnectionsByNetworkId(networkId.value)
-  return { data, total: data.length }
-}
 
 function networkStatusBadge(status: NetworkStatus): string {
   if (status === 'ready') return 'success'

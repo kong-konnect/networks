@@ -4,27 +4,27 @@
     title="Create network"
     :back-to="{ name: 'networks-list' }"
   >
+    <template #actions>
+      <KButton
+        v-if="!kaiCfg.shown.value"
+        appearance="tertiary"
+        class="kai-header-action"
+        data-testid="create-kai-configure"
+        @click="kaiCfg.run()"
+      >
+        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+        Configure with KAi
+      </KButton>
+    </template>
+
     <div class="network-create">
       <div class="create-layout">
         <div class="create-main">
       <!-- Orientation (not a blocking gate) -->
-      <div class="create-kai-row">
-        <KAlert
-          appearance="info"
-          class="create-kai-alert"
-          message="A network is provisioned by Kong and takes 45 minutes or more to become ready. Region and CIDR range are permanent — they can't be changed after creation."
-        />
-        <button
-          v-if="!kaiCfg.shown.value"
-          type="button"
-          class="kai-configure-link"
-          data-testid="create-kai-configure"
-          @click="kaiCfg.run()"
-        >
-          <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
-          Configure with KAi
-        </button>
-      </div>
+      <KAlert
+        appearance="info"
+        message="A network is provisioned by Kong and takes 45 minutes or more to become ready. Region and CIDR range are permanent — they can't be changed after creation."
+      />
 
       <KaiSummaryCard
         v-if="kaiCfg.shown.value"
@@ -275,7 +275,7 @@
         </div>
       </section>
 
-      <footer class="create-footer">
+      <WizardFooter>
         <KButton
           appearance="primary"
           :disabled="!canCreate || isSubmitting"
@@ -291,20 +291,22 @@
           {{ isSubmitting ? 'Creating network…' : 'Create network' }}
         </KButton>
         <KButton
-          appearance="tertiary"
+          appearance="secondary"
           data-testid="network-cancel"
           @click="router.push({ name: 'networks-list' })"
         >
           Cancel
         </KButton>
-        <KButton
-          appearance="tertiary"
-          data-testid="network-view-config"
-          @click="showConfigSlideout = true"
-        >
-          View configuration
-        </KButton>
-      </footer>
+        <template #aux>
+          <KButton
+            appearance="tertiary"
+            data-testid="network-view-config"
+            @click="showConfigSlideout = true"
+          >
+            View configuration
+          </KButton>
+        </template>
+      </WizardFooter>
         </div>
 
         <div class="side-rail">
@@ -360,6 +362,7 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
+import WizardFooter from '@/components/WizardFooter.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'

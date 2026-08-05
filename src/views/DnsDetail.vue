@@ -55,22 +55,17 @@
       <template #title>Provisioning</template>
     </KAlert>
 
-    <!-- KAi remediation when this DNS isn't healthy -->
-    <div v-if="dns.status !== 'ready' && !kai.shown.value" class="kai-inline-trigger">
-      <KButton appearance="tertiary" class="kai-summarize-link" data-testid="dns-kai" @click="kai.run()">
-        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
-        Explain with KAi
-      </KButton>
-    </div>
+    <!-- KAi remediation when this DNS isn't healthy — compact, one-liner by default -->
     <KaiSummaryCard
-      v-if="kai.shown.value"
-      :loading="kai.loading.value"
+      v-if="dns.status !== 'ready' && kaiOpen"
       title="What KAi found"
       :insights="kaiInsights"
+      :one-liner="kaiOneLiner"
       :actions="kaiActions"
+      initial-collapsed
       data-testid="dns-kai-card"
       @action="onKaiAction"
-      @close="kai.close()"
+      @close="kaiOpen = false"
     />
 
     <KCard title="Details">
@@ -99,28 +94,12 @@
     </KCard>
 
     <KCard title="Events">
-      <table class="rows-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Event</th>
-            <th>Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(ev, i) in (dns.events || [])"
-            :key="i"
-          >
-            <td>{{ timeAgo(ev.time) }}</td>
-            <td class="details-cell">{{ ev.event }}</td>
-            <td><KBadge :appearance="eventBadge(ev.result)">{{ ev.result }}</KBadge></td>
-          </tr>
-          <tr v-if="!dns.events || dns.events.length === 0">
-            <td colspan="3" class="dash">No events recorded.</td>
-          </tr>
-        </tbody>
-      </table>
+      <DetailTable v-if="(dns.events || []).length" :columns="eventColumns" :rows="dns.events || []" row-key="time">
+        <template #cell-time="{ row }"><span class="cell-muted">{{ timeAgo(row.time) }}</span></template>
+        <template #cell-event="{ row }">{{ row.event }}</template>
+        <template #cell-result="{ row }"><KBadge :appearance="eventBadge(row.result)">{{ row.result }}</KBadge></template>
+      </DetailTable>
+      <p v-else class="dash">No events recorded.</p>
     </KCard>
   </PageLayout>
 
@@ -139,17 +118,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { SparklesIcon } from '@kong/icons'
-import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import { KAlert, KBadge, KButton, KCard, KEmptyState } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
+import DetailTable from '@/components/DetailTable.vue'
+import type { DetailColumn } from '@/components/DetailTable.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import { useKaiPanel } from '@/composables/useKaiPanel'
 import { connectionTypeLabel, timeAgo } from '@/utils/connectionDisplay'
 import type { DnsType, DnsStatus } from '@/types'
 
@@ -171,8 +149,20 @@ const breadcrumbs = computed(() => [
   { key: 'dns', text: dns.value?.name || '' },
 ])
 
+const eventColumns: DetailColumn[] = [
+  { key: 'time', label: 'Time' },
+  { key: 'event', label: 'Event' },
+  { key: 'result', label: 'Result' },
+]
+
 // ── KAi remediation (when this DNS isn't healthy) ─────────────────────────────
-const kai = useKaiPanel(900)
+const kaiOpen = ref(true)
+const kaiOneLiner = computed(() => {
+  const d = dns.value
+  if (!d) return ''
+  if (d.status === 'error') return `${d.name} isn't resolving — its resolver is unreachable from the network.`
+  return `${d.name} is still provisioning and should resolve shortly.`
+})
 const kaiInsights = computed<KaiInsight[]>(() => {
   const d = dns.value
   if (!d) return []
