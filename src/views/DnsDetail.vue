@@ -18,12 +18,6 @@
         Check status
       </KButton>
       <KButton
-        appearance="tertiary"
-        @click="backToDns"
-      >
-        Back to private DNS
-      </KButton>
-      <KButton
         appearance="danger"
         @click="handleDelete"
       >

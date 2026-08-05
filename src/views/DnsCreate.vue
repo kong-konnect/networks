@@ -41,72 +41,66 @@
             @close="kaiCfg.close()"
           />
 
-          <EntityBaseForm
-            entity-type="dns"
-            :can-submit="canCreate && !isSubmitting"
-            @submit="handleCreate"
-            @cancel="goBack"
+          <EntityFormBlock
+            :step="1"
+            title="Private DNS details"
+            description="Private DNS resolves private service names reached through this network. It starts in a pending state and resolves once its underlying connectivity is ready."
           >
-            <EntityFormSection
-              title="Private DNS details"
-              description="Private DNS resolves private service names reached through this network. It starts in a pending state and resolves once its underlying connectivity is ready."
+            <div class="form-group">
+              <KLabel :required="true">Name / domain</KLabel>
+              <KInput
+                v-model.trim="form.name"
+                data-testid="dns-domain"
+                placeholder="e.g., payments.internal.company.com"
+                width="100%"
+              />
+            </div>
+
+            <div class="form-group">
+              <KLabel :required="true">Type</KLabel>
+              <KSelect
+                v-model="form.type"
+                :items="dnsTypeOptions"
+                data-testid="dns-type"
+                width="100%"
+              />
+              <p class="field-help">{{ typeHelp }}</p>
+            </div>
+
+            <div class="form-group">
+              <KLabel :required="true">Used for</KLabel>
+              <KInput
+                v-model.trim="form.usedFor"
+                data-testid="dns-usedfor"
+                placeholder="e.g., Upstream services"
+                width="100%"
+              />
+            </div>
+          </EntityFormBlock>
+
+          <WizardFooter>
+            <KButton
+              appearance="primary"
+              :disabled="!canCreate || isSubmitting"
+              data-testid="dns-create-button"
+              @click="handleCreate"
             >
-              <div class="form-group">
-                <KLabel :required="true">Name / domain</KLabel>
-                <KInput
-                  v-model.trim="form.name"
-                  data-testid="dns-domain"
-                  placeholder="e.g., payments.internal.company.com"
-                  width="100%"
-                />
-              </div>
-
-              <div class="form-group">
-                <KLabel :required="true">Type</KLabel>
-                <KSelect
-                  v-model="form.type"
-                  :items="dnsTypeOptions"
-                  data-testid="dns-type"
-                  width="100%"
-                />
-                <p class="field-help">{{ typeHelp }}</p>
-              </div>
-
-              <div class="form-group">
-                <KLabel :required="true">Used for</KLabel>
-                <KInput
-                  v-model.trim="form.usedFor"
-                  data-testid="dns-usedfor"
-                  placeholder="e.g., Upstream services"
-                  width="100%"
-                />
-              </div>
-            </EntityFormSection>
-
-            <template #form-actions>
-              <KButton
-                appearance="tertiary"
-                data-testid="dns-cancel"
-                @click="goBack"
-              >
-                Cancel
-              </KButton>
-              <KButton
-                appearance="primary"
-                :disabled="!canCreate || isSubmitting"
-                data-testid="dns-create-button"
-                @click="handleCreate"
-              >
-                <ProgressIcon
-                  v-if="isSubmitting"
-                  class="btn-spinner"
-                  :size="KUI_ICON_SIZE_20"
-                  decorative
-                />
-                {{ isSubmitting ? 'Adding…' : 'Add private DNS' }}
-              </KButton>
-            </template>
-          </EntityBaseForm>
+              <ProgressIcon
+                v-if="isSubmitting"
+                class="btn-spinner"
+                :size="KUI_ICON_SIZE_20"
+                decorative
+              />
+              {{ isSubmitting ? 'Adding…' : 'Add private DNS' }}
+            </KButton>
+            <KButton
+              appearance="tertiary"
+              data-testid="dns-cancel"
+              @click="goBack"
+            >
+              Cancel
+            </KButton>
+          </WizardFooter>
     </div>
   </PageLayout>
 
@@ -136,8 +130,8 @@ import {
   ToastManager,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
-import EntityBaseForm from '@/components/EntityBaseForm.vue'
-import EntityFormSection from '@/components/EntityFormSection.vue'
+import EntityFormBlock from '@/components/EntityFormBlock.vue'
+import WizardFooter from '@/components/WizardFooter.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
