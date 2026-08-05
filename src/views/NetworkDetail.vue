@@ -469,10 +469,35 @@
 
       <!-- ── Communication tab ────────────────────────────────── -->
       <div v-if="activeTab === '#communication'" class="tab-content">
-        <div class="section-header-text">
-          <h2 class="section-title">System map</h2>
-          <p class="section-help">How this network is used by gateways, DNS, and connectivity resources. Opens on what needs attention.</p>
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2 class="section-title">System map</h2>
+            <p class="section-help">How this network is used by gateways, DNS, and connectivity resources. Opens on what needs attention.</p>
+          </div>
+          <KButton
+            v-if="!kaiShown"
+            appearance="secondary"
+            class="kai-summarize-btn"
+            data-testid="kai-summarize"
+            @click="runKaiSummary"
+          >
+            <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+            Summarize with KAi
+          </KButton>
         </div>
+
+        <KaiSummaryCard
+          v-if="kaiShown"
+          :loading="kaiLoading"
+          title="Network health summary"
+          :insights="kaiInsights"
+          :one-liner="kaiOneLiner"
+          :actions="kaiActions"
+          data-testid="kai-network-summary"
+          @action="onKaiAction"
+          @close="kaiShown = false"
+        />
+
         <NetworkCommunicationMap
           :network="network"
           :connections="connections"
@@ -686,6 +711,7 @@ import {
   InfoIcon,
   NotificationOutlineIcon,
   ProgressIcon,
+  SparklesIcon,
   AwsIcon,
   GoogleCloudIcon,
   AzureIcon,
@@ -714,6 +740,8 @@ import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
@@ -753,6 +781,73 @@ const directionBreakdown = computed(() => {
     }))
     .filter(b => b.count > 0)
 })
+
+// ── KAi contextual summary (prototype) ────────────────────────────────────────
+// A "Summarize with KAi" entry on the Communication tab produces an insight card whose
+// content is derived from the network's ACTUAL problem state (not a static blob), plus
+// suggested next actions that deep-link into the relevant view.
+const kaiShown = ref(false)
+const kaiLoading = ref(false)
+
+const kaiProblems = computed(() => ({
+  dnsErr: dnsList.value.filter(d => d.status === 'error'),
+  dnsPending: dnsList.value.filter(d => d.status === 'pending'),
+  connBad: connections.value.filter(c => c.status === 'error' || c.status === 'pending-user-action' || c.status === 'pending-acceptance'),
+  total: dnsList.value.length + connections.value.length,
+}))
+
+const kaiInsights = computed<KaiInsight[]>(() => {
+  const p = kaiProblems.value
+  const count = p.dnsErr.length + p.dnsPending.length + p.connBad.length
+  if (count === 0) {
+    return [{ lead: 'All healthy:', text: `every gateway, connection, and DNS record on ${network.value?.name} is resolving and ready.` }]
+  }
+  const lines: KaiInsight[] = [
+    { lead: 'Needs attention:', text: `${count} of ${p.total} relationships on this network aren't healthy.`, tone: 'critical' },
+  ]
+  if (p.dnsErr.length) {
+    lines.push({ lead: 'DNS not resolving:', text: `${p.dnsErr[0].name} is unreachable — its resolver can't be reached from the network.` })
+  }
+  if (p.connBad.length) {
+    lines.push({ lead: 'Connectivity:', text: `${p.connBad[0].name} is ${statusLabel(p.connBad[0].status).toLowerCase()}, so paths that depend on it can't complete.` })
+  } else if (p.dnsPending.length) {
+    lines.push({ text: `${p.dnsPending[0].name} is still provisioning and should resolve shortly.` })
+  }
+  return lines
+})
+
+const kaiOneLiner = computed(() => {
+  const p = kaiProblems.value
+  const count = p.dnsErr.length + p.dnsPending.length + p.connBad.length
+  return count === 0
+    ? `${network.value?.name} is healthy — nothing needs attention.`
+    : `${count} relationships need attention — DNS and connectivity issues on ${network.value?.name}.`
+})
+
+const kaiActions = computed<KaiAction[]>(() => {
+  const p = kaiProblems.value
+  const actions: KaiAction[] = []
+  if (p.dnsErr.length) actions.push({ key: 'view-dns', label: `Open ${p.dnsErr[0].name}` })
+  if (p.connBad.length) actions.push({ key: 'review-conn', label: 'Review connectivity' })
+  actions.push({ key: 'ask', label: 'Ask KAi about this' })
+  return actions
+})
+
+const runKaiSummary = () => {
+  kaiShown.value = true
+  kaiLoading.value = true
+  // Brief "summarizing…" state, mirroring the product's streaming summary.
+  window.setTimeout(() => { kaiLoading.value = false }, 1100)
+}
+
+const onKaiAction = (key: string) => {
+  if (key === 'view-dns' && kaiProblems.value.dnsErr[0]) {
+    goToDns(kaiProblems.value.dnsErr[0].id)
+  } else if (key === 'review-conn') {
+    viewTab('#connectivity')
+  }
+  // 'ask' is a no-op stub in the prototype (would open the global Ask KAi assistant).
+}
 const showDeleteModal = ref(false)
 const showBlockedModal = ref(false)
 

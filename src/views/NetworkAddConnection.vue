@@ -4,17 +4,41 @@
     title="Add connection"
     :breadcrumbs="breadcrumbs"
   >
-    <!-- Context banner -->
-    <KCard class="context-banner">
-      <div class="context-row">
-        <span class="context-label">Selected network</span>
-        <span class="context-value">{{ network.name }}</span>
-      </div>
-      <div class="context-row">
-        <span class="context-label">Cloud</span>
-        <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
-      </div>
-    </KCard>
+    <!-- Context banner + KAi setup assist -->
+    <div class="context-row-wrap">
+      <KCard class="context-banner">
+        <div class="context-row">
+          <span class="context-label">Selected network</span>
+          <span class="context-value">{{ network.name }}</span>
+        </div>
+        <div class="context-row">
+          <span class="context-label">Cloud</span>
+          <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
+        </div>
+      </KCard>
+      <button
+        v-if="!kaiShown"
+        type="button"
+        class="kai-configure-link"
+        data-testid="kai-configure"
+        @click="runKaiConfigure"
+      >
+        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+        Configure with KAi
+      </button>
+    </div>
+
+    <KaiSummaryCard
+      v-if="kaiShown"
+      :loading="kaiLoading"
+      title="KAi setup suggestion"
+      :insights="kaiInsights"
+      :one-liner="kaiOneLiner"
+      :actions="kaiActions"
+      data-testid="kai-setup-suggestion"
+      @action="onKaiAction"
+      @close="kaiShown = false"
+    />
 
     <!-- Step 1 — choose method -->
     <EntityFormBlock
@@ -190,10 +214,12 @@ import {
   KLabel,
   KTextArea,
 } from '@kong/kongponents'
-import { ExternalLinkIcon } from '@kong/icons'
+import { ExternalLinkIcon, SparklesIcon } from '@kong/icons'
 import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityFormBlock from '@/components/EntityFormBlock.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import { directionCategory, directionCategoryLabel, directionCategoryHelp } from '@/utils/connectionDisplay'
 import type { CloudProvider, ConnectionType, ConnectionFamily, ConnectionDirection } from '@/types'
@@ -356,6 +382,47 @@ const selectedMethod = computed<Method | undefined>(() =>
   methods.value.find(m => m.type === selectedType.value),
 )
 
+// ── KAi setup assist (prototype) ─────────────────────────────────────────────
+// "Configure with KAi" recommends a connection method for this cloud and can pre-fill
+// the form. Mirrors the product's "Configure with KAi" entry on setup screens.
+const kaiShown = ref(false)
+const kaiLoading = ref(false)
+
+const recommendedType = computed<ConnectionType>(() => {
+  const c = network.value?.cloud
+  if (c === 'gcp') return 'gcp-psc-egress'
+  if (c === 'azure') return 'azure-private-endpoint-egress'
+  return 'aws-rep-egress'
+})
+const recommendedMethod = computed(() => methods.value.find(m => m.type === recommendedType.value) || methods.value[0])
+
+const kaiInsights = computed<KaiInsight[]>(() => {
+  const m = recommendedMethod.value
+  if (!m) return []
+  return [
+    { lead: 'Recommended:', text: `to let the gateway reach your upstream services privately on ${network.value?.cloud.toUpperCase()}, use ${m.label}. It's service-scoped and one-way (Kong → upstream), so it exposes only what you share.` },
+    { text: 'If you need full bidirectional routing between whole networks instead, peer the networks — but that grants broader access.' },
+  ]
+})
+const kaiOneLiner = computed(() => `Recommended: ${recommendedMethod.value?.label} for private upstream access.`)
+const kaiActions = computed<KaiAction[]>(() => [
+  { key: 'apply', label: `Use ${recommendedMethod.value?.label}` },
+  { key: 'ask', label: 'Ask KAi' },
+])
+
+const runKaiConfigure = () => {
+  kaiShown.value = true
+  kaiLoading.value = true
+  window.setTimeout(() => { kaiLoading.value = false }, 1000)
+}
+const onKaiAction = (key: string) => {
+  if (key === 'apply' && recommendedMethod.value) {
+    selectedType.value = recommendedMethod.value.type
+    if (!form.name.trim()) form.name = `${network.value?.cloud}-upstream-access`
+  }
+  // 'ask' is a no-op stub (would open the global Ask KAi assistant).
+}
+
 // Directional variant (prototype compare): group the methods by traffic direction so the
 // one-way nature of resource endpoints (Kong → upstream only) is explicit.
 const isDirectional = computed(() => store.connectivityView.value === 'directional')
@@ -507,8 +574,32 @@ const handleSubmit = async () => {
 <style scoped lang="scss">
 @use "@kong/design-tokens/tokens/scss/variables" as *;
 
+.context-row-wrap {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-50;
+  justify-content: space-between;
+}
+
 .context-banner {
+  flex: 1;
   max-width: 720px;
+}
+
+.kai-configure-link {
+  align-items: center;
+  background: none;
+  border: none;
+  color: $kui-color-text-decorative-purple;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  padding: $kui-space-0;
+
+  &:hover { text-decoration: underline; }
 }
 
 // Customer-side requirements + acknowledgement (Kong can't detect these steps).
