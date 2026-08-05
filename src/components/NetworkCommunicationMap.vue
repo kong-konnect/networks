@@ -26,7 +26,8 @@
       @pointercancel="onPointerUp"
       @wheel="onWheel"
     >
-      <div class="flow-controls" @pointerdown.stop>
+      <!-- Navigation controls (zoom / fit) — grouped on the left. -->
+      <div class="flow-controls flow-controls--nav" @pointerdown.stop>
         <KButton appearance="secondary" size="small" data-testid="ncm-zoom-in" aria-label="Zoom in" @click="zoomButton(1.2)">
           <AddIcon :size="KUI_ICON_SIZE_20" decorative />
         </KButton>
@@ -36,8 +37,11 @@
         <KButton appearance="secondary" size="small" data-testid="ncm-zoom-fit" @click="fit">
           Fit
         </KButton>
+      </div>
+
+      <!-- Filter control — different job from navigation, so it stands apart. -->
+      <div v-if="healthyCount" class="flow-controls flow-controls--filter" @pointerdown.stop>
         <KButton
-          v-if="healthyCount"
           :appearance="focusProblems ? 'primary' : 'secondary'"
           size="small"
           data-testid="ncm-focus-problems"
@@ -825,10 +829,12 @@ watch(() => [layout.value.width, layout.value.height], () => nextTick(fit))
 .flow-controls {
   display: flex;
   gap: $kui-space-30;
-  left: $kui-space-50;
   position: absolute;
   top: $kui-space-50;
   z-index: 2;
+
+  &--nav { left: $kui-space-50; }
+  &--filter { right: $kui-space-50; }
 }
 
 .flow-hint {

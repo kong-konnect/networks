@@ -5,10 +5,6 @@
     :back-to="{ name: 'networks-detail', params: { id: networkId } }"
     :breadcrumbs="breadcrumbs"
   >
-    <template #title-after>
-      <KBadge appearance="success">Ready</KBadge>
-    </template>
-
     <div class="test-subheader">
       <p class="test-subtitle">Validate private ingress, egress, and DNS reachability from this network.</p>
     </div>

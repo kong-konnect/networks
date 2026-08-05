@@ -5,10 +5,6 @@
     :back-to="{ name: 'networks-detail', params: { id: networkId } }"
     :breadcrumbs="breadcrumbs"
   >
-    <template #title-after>
-      <KBadge :appearance="statusBadge(dns.status)">{{ statusLabel(dns.status) }}</KBadge>
-    </template>
-
     <template #actions>
       <KButton
         v-if="dns.status !== 'ready'"

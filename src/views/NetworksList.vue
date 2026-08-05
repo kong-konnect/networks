@@ -21,7 +21,7 @@
         <span class="empty-icon"><ConnectionsIcon :size="KUI_ICON_SIZE_50" decorative /></span>
         <h2 class="empty-title">Create your first network</h2>
         <p class="empty-desc">
-          A network is a private, single-region space in your cloud where Kong runs dedicated cloud gateways. Create one, then add the private connectivity and DNS your services need.
+          A network is a private, single-region space in your cloud where Kong runs dedicated cloud gateways.
         </p>
         <div class="empty-actions">
           <KButton appearance="primary" data-testid="empty-create" @click="router.push({ name: 'networks-create' })">
@@ -83,31 +83,6 @@
             @action="onKaiSetupAction"
             @close="kaiSetup.close()"
           />
-        </div>
-        <!-- How a network sits between your clients and your services -->
-        <div class="empty-diagram" aria-hidden="true">
-          <div class="flow-node">
-            <span class="flow-icon"><PeopleIcon :size="KUI_ICON_SIZE_30" decorative /></span>
-            <span class="flow-title">Client</span>
-            <span class="flow-sub">Your users and apps</span>
-          </div>
-          <div class="flow-link">
-            <span class="flow-link-row"><span class="flow-link-label">Request</span><span class="flow-arrow">→</span></span>
-            <span class="flow-link-row"><span class="flow-arrow">←</span><span class="flow-link-label flow-link-label--muted">Response</span></span>
-          </div>
-          <div class="flow-node flow-node--center">
-            <span class="flow-icon"><WorldPrivateIcon :size="KUI_ICON_SIZE_30" decorative /></span>
-            <span class="flow-title">Kong network</span>
-            <span class="flow-sub">Private connectivity + DNS</span>
-          </div>
-          <div class="flow-link">
-            <span class="flow-link-row"><span class="flow-link-label">Reaches</span><span class="flow-arrow">→</span></span>
-          </div>
-          <div class="flow-node">
-            <span class="flow-icon"><StackIcon :size="KUI_ICON_SIZE_30" decorative /></span>
-            <span class="flow-title">Your services</span>
-            <span class="flow-sub">Private APIs and upstreams</span>
-          </div>
         </div>
       </section>
 
@@ -286,11 +261,8 @@ import {
   AddCircleIcon,
   ConnectionsIcon,
   ForwardIcon,
-  PeopleIcon,
   SparklesIcon,
-  StackIcon,
   WarningIcon,
-  WorldPrivateIcon,
 } from '@kong/icons'
 import {
   KBadge,

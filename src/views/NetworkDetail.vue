@@ -291,7 +291,6 @@
           <section class="detail-card" data-testid="connectivity-summary">
             <div class="section-header-text">
               <h3 class="numbered-title">Private connectivity</h3>
-              <p class="section-help">{{ connections.length }} connection{{ connections.length === 1 ? '' : 's' }} on this network.</p>
             </div>
             <div
               v-if="isDirectional && directionBreakdown.length"
@@ -337,7 +336,6 @@
           <section class="detail-card" data-testid="dns-summary">
             <div class="section-header-text">
               <h3 class="numbered-title">Private DNS</h3>
-              <p class="section-help">{{ dnsList.length }} configuration{{ dnsList.length === 1 ? '' : 's' }} on this network.</p>
             </div>
             <DetailTable
               v-if="dnsList.length"
@@ -376,7 +374,6 @@
         <section class="detail-card" data-testid="attached-gateways">
           <div class="section-header-text">
             <h3 class="numbered-title">Attached gateways</h3>
-            <p class="section-help">Gateways currently using this network.</p>
           </div>
           <DetailTable
             v-if="usedByRows.length"
@@ -402,7 +399,6 @@
       <div v-if="activeTab === '#communication'" class="tab-content">
         <div class="section-header-text">
           <h2 class="section-title">System map</h2>
-          <p class="section-help">How this network is used by gateways, DNS, and connectivity resources. Opens on what needs attention.</p>
         </div>
 
         <NetworkCommunicationMap
@@ -420,7 +416,6 @@
         <div class="section-header">
           <div class="section-header-text">
             <h2 class="section-title">Connectivity</h2>
-            <p class="section-help">Private connectivity resources attached to this network.</p>
           </div>
           <div class="section-header-actions">
             <KButton appearance="primary" @click="goToAddConnection">
@@ -475,7 +470,6 @@
         <div class="section-header">
           <div class="section-header-text">
             <h2 class="section-title">Private DNS</h2>
-            <p class="section-help">Private DNS resolves private service names from this network.</p>
           </div>
           <KButton
             appearance="primary"

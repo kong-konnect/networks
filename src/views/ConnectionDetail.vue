@@ -5,12 +5,6 @@
     :back-to="{ name: 'networks-detail', params: { id: networkId } }"
     :breadcrumbs="breadcrumbs"
   >
-    <template #title-after>
-      <KBadge :appearance="statusBadgeAppearance(connection.status)">
-        {{ statusLabel(connection.status) }}
-      </KBadge>
-    </template>
-
     <template #actions>
       <KDropdown :kpop-attributes="{ placement: 'bottom-end' }">
         <KButton
@@ -228,6 +222,7 @@ const detailCollections = computed(() => {
   if (!connection.value || !network.value) return []
   const r = network.value.regions[0]
   const items = [
+    { key: 'status', label: 'Status', value: statusLabel(connection.value.status), type: 'plain' as const },
     { key: 'type', label: 'Type', value: connectionTypeLabel(connection.value.type), type: 'plain' as const },
     { key: 'scope', label: 'Scope', value: scopeLabel(connection.value), type: 'plain' as const },
     { key: 'network', label: 'Network', value: network.value.name, type: 'plain' as const },

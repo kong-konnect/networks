@@ -13,37 +13,38 @@
 
     <!-- Result -->
     <div v-else class="kai-result">
-      <div class="kai-head-row">
-        <SparklesIcon class="kai-spark" :size="KUI_ICON_SIZE_30" decorative />
-        <span class="kai-title">{{ title }}</span>
-        <span class="kai-time">{{ timeLabel }}</span>
-        <span class="kai-head-divider" />
-        <button
-          type="button"
-          class="kai-icon-btn"
-          :aria-label="collapsed ? 'Expand' : 'Collapse'"
-          data-testid="kai-collapse"
-          @click="collapsed = !collapsed"
-        >
-          <component :is="collapsed ? ChevronDownIcon : ChevronUpIcon" :size="KUI_ICON_SIZE_20" decorative />
-        </button>
-        <button
-          type="button"
-          class="kai-icon-btn"
-          aria-label="Dismiss"
-          data-testid="kai-close"
-          @click="$emit('close')"
-        >
-          <CloseIcon :size="KUI_ICON_SIZE_20" decorative />
-        </button>
-      </div>
+      <SparklesIcon class="kai-spark" :size="KUI_ICON_SIZE_30" decorative />
+      <div class="kai-main">
+        <div class="kai-titlerow">
+          <span class="kai-title">{{ title }}</span>
+          <span class="kai-time">{{ timeLabel }}</span>
+          <span class="kai-head-divider" />
+          <button
+            type="button"
+            class="kai-icon-btn"
+            :aria-label="collapsed ? 'Expand' : 'Collapse'"
+            data-testid="kai-collapse"
+            @click="collapsed = !collapsed"
+          >
+            <component :is="collapsed ? ChevronDownIcon : ChevronUpIcon" :size="KUI_ICON_SIZE_20" decorative />
+          </button>
+          <button
+            type="button"
+            class="kai-icon-btn"
+            aria-label="Dismiss"
+            data-testid="kai-close"
+            @click="$emit('close')"
+          >
+            <CloseIcon :size="KUI_ICON_SIZE_20" decorative />
+          </button>
+        </div>
 
-      <!-- Collapsed → one line -->
-      <p v-if="collapsed" class="kai-oneliner">{{ oneLiner }}</p>
+        <!-- Collapsed → one line -->
+        <p v-if="collapsed" class="kai-oneliner">{{ oneLiner }}</p>
 
-      <!-- Expanded → full insights + actions + feedback -->
-      <template v-else>
-        <div class="kai-insights">
+        <!-- Expanded → full insights + actions + feedback -->
+        <template v-else>
+          <div class="kai-insights">
           <p
             v-for="(ins, i) in insights"
             :key="i"
@@ -100,7 +101,8 @@
             </button>
           </div>
         </div>
-      </template>
+        </template>
+      </div>
     </div>
   </section>
 </template>
@@ -171,6 +173,20 @@ const copy = () => {
 }
 
 .kai-head-row {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-40;
+}
+
+// Result layout: icon on the left; title + copy stack to its right and align to
+// each other (copy sits under the title, not floated to the card edge).
+.kai-result {
+  align-items: flex-start;
+  display: flex;
+  gap: $kui-space-40;
+}
+.kai-main { flex: 1 1 auto; min-width: 0; }
+.kai-titlerow {
   align-items: center;
   display: flex;
   gap: $kui-space-40;
@@ -258,7 +274,7 @@ const copy = () => {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-30;
   line-height: $kui-line-height-40;
-  margin: $kui-space-40 $kui-space-0 $kui-space-0;
+  margin: $kui-space-20 $kui-space-0 $kui-space-0;
 }
 
 .kai-footer {
