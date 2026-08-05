@@ -397,10 +397,6 @@
 
       <!-- ── Communication tab ────────────────────────────────── -->
       <div v-if="activeTab === '#communication'" class="tab-content">
-        <div class="section-header-text">
-          <h2 class="section-title">System map</h2>
-        </div>
-
         <NetworkCommunicationMap
           :network="network"
           :connections="connections"
