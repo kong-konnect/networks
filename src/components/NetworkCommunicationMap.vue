@@ -1,46 +1,29 @@
 <template>
   <div class="ncm">
-    <!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
-    <div class="ncm-toolbar">
-      <p v-if="mode === 'map'" class="ncm-caption">
-        <template v-if="problemCount">
-          {{ problemCount }} relationship{{ problemCount === 1 ? '' : 's' }} need{{ problemCount === 1 ? 's' : '' }} attention.
-        </template>
-        <template v-else>Everything is healthy.</template>
-        <span class="ncm-caption-dim">Drag to pan · scroll with {{ modKeyLabel }} to zoom · select a node for details.</span>
-      </p>
-      <p v-else class="ncm-caption">Follow one service's path end to end to see where it breaks.</p>
+    <!-- ── KAi reads the map (map mode only) ───────────────────────────────── -->
+    <template v-if="mode === 'map'">
+      <KaiSummaryCard
+        v-if="kaiOpen"
+        class="ncm-kai"
+        title="KAi read this map"
+        :insights="kaiInsights"
+        :one-liner="kaiOneLiner"
+        :actions="kaiActions"
+        :initial-collapsed="problemCount === 0"
+        data-testid="ncm-kai"
+        @action="onKaiAction"
+        @close="kaiOpen = false"
+      />
+      <p class="ncm-hint">Drag to pan · scroll with {{ modKeyLabel }} to zoom · select a node for details.</p>
+    </template>
 
-      <div class="ncm-toolbar-actions">
-        <KButton
-          v-if="mode === 'map' && healthyCount"
-          appearance="tertiary"
-          size="small"
-          data-testid="ncm-focus-problems"
-          @click="focusProblems = !focusProblems"
-        >
-          {{ focusProblems ? 'Show all' : 'Focus problems' }}
-        </KButton>
-        <KButton
-          v-if="mode === 'map' && services.length"
-          appearance="tertiary"
-          size="small"
-          data-testid="ncm-trace-mode"
-          @click="enterTrace"
-        >
-          <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
-          Trace a path
-        </KButton>
-        <KButton
-          v-if="mode === 'trace'"
-          appearance="tertiary"
-          size="small"
-          data-testid="ncm-back-to-map"
-          @click="exitTrace"
-        >
-          Back to map
-        </KButton>
-      </div>
+    <!-- Trace mode gets a quiet back control, not a primary action. -->
+    <div v-else class="ncm-trace-head">
+      <KButton appearance="tertiary" size="small" data-testid="ncm-back-to-map" @click="exitTrace">
+        <ArrowLeftIcon :size="KUI_ICON_SIZE_20" decorative />
+        Back to map
+      </KButton>
+      <span class="ncm-trace-headtext">Tracing one service end to end.</span>
     </div>
 
     <!-- ── MAP MODE: pannable topology canvas ──────────────────────────────── -->
@@ -65,6 +48,15 @@
           </KButton>
           <KButton appearance="secondary" size="small" data-testid="ncm-zoom-fit" @click="fit">
             Fit
+          </KButton>
+          <KButton
+            v-if="healthyCount"
+            :appearance="focusProblems ? 'primary' : 'secondary'"
+            size="small"
+            data-testid="ncm-focus-problems"
+            @click="focusProblems = !focusProblems"
+          >
+            {{ focusProblems ? 'Show all' : 'Focus problems' }}
           </KButton>
         </div>
 
@@ -195,6 +187,13 @@
           <span class="ncm-detail-action-label">Recommended action</span>
           <p class="ncm-detail-action-text">{{ nodeAction(selectedNode) }}</p>
         </div>
+
+        <div v-if="serviceForNode(selectedNode)" class="ncm-detail-cta">
+          <KButton appearance="secondary" data-testid="ncm-detail-trace" @click="traceFromNode(selectedNode)">
+            <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
+            Trace this path
+          </KButton>
+        </div>
       </div>
     </KSlideout>
   </div>
@@ -205,6 +204,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { KBadge, KButton, KSlideout } from '@kong/kongponents'
 import {
   ArrowRightIcon,
+  ArrowLeftIcon,
   AddIcon,
   RemoveIcon,
   NetworkIcon,
@@ -214,6 +214,8 @@ import {
   LocationIcon,
 } from '@kong/icons'
 import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import type { Network, Connection, Gateway, DnsConfig } from '@/types'
 import type { ServicePath } from '@/composables/useNetworksStore'
 import {
@@ -376,6 +378,56 @@ const problemCount = computed(() => flowResourceNodes.value.filter(n => n.tone !
 const healthyCount = computed(() => flowResourceNodes.value.filter(n => n.tone === 'ready').length)
 const isDim = (tone: Tone) => focusProblems.value && tone === 'ready'
 
+// ── KAi: read the system map ───────────────────────────────────────────────
+// The AI value here is reading the graph — triage, root cause, and blast
+// radius — not another button. KAi names what's wrong, what it blocks, and its
+// "Try" chips drive the map (focus problems, trace the broken path, open node).
+const rank = (t: Tone) => t === 'error' ? 2 : t === 'pending' ? 1 : 0
+const uniq = (a: string[]) => [...new Set(a)]
+const listJoin = (a: string[]) =>
+  a.length <= 1 ? (a[0] ?? '') : a.length === 2 ? `${a[0]} and ${a[1]}` : `${a.slice(0, -1).join(', ')}, and ${a[a.length - 1]}`
+
+const problemNodes = computed(() =>
+  flowResourceNodes.value.filter(n => n.tone !== 'ready').sort((a, b) => rank(b.tone) - rank(a.tone)))
+
+// Targets a broken connectivity/DNS node cuts off downstream.
+const downstreamTargets = (n: FNode): string[] => {
+  if (n.kind === 'connectivity') return uniq(props.services.filter(s => s.connectionId === n.id.slice(5)).map(s => s.target.name))
+  if (n.kind === 'dns') return uniq(props.services.filter(s => s.dnsConfigId === n.id.slice(4)).map(s => s.target.name))
+  return []
+}
+
+const kaiOpen = ref(true)
+const kaiOneLiner = computed(() => {
+  const p = problemNodes.value
+  if (!p.length) return 'Everything in this map is healthy — traffic reaches every target.'
+  return `${p.length} relationship${p.length === 1 ? '' : 's'} need attention — start with ${p[0].name}.`
+})
+const kaiInsights = computed<KaiInsight[]>(() => {
+  const p = problemNodes.value
+  if (!p.length) return [{ lead: 'Healthy:', text: 'every gateway, connection, and DNS record on this network is reaching its target.' }]
+  const insights: KaiInsight[] = p.slice(0, 3).map(n => {
+    const blocks = downstreamTargets(n)
+    const impact = blocks.length ? ` This blocks ${listJoin(blocks)}.` : ''
+    return { lead: n.name, text: `is ${n.statusLabel.toLowerCase()}.${impact}`, tone: n.tone === 'error' ? 'critical' : 'default' }
+  })
+  if (p.length > 3) insights.push({ text: `+${p.length - 3} more need attention.` })
+  return insights
+})
+const kaiActions = computed<KaiAction[]>(() => {
+  const a: KaiAction[] = []
+  if (problemNodes.value.length && healthyCount.value) a.push({ key: 'focus', label: 'Show only what needs attention' })
+  if (worstServiceId.value) a.push({ key: 'trace', label: problemNodes.value.length ? 'Trace the broken path' : 'Trace a service path' })
+  const top = problemNodes.value[0]
+  if (top) a.push({ key: `open:${top.id}`, label: `Open ${top.name}` })
+  return a
+})
+const onKaiAction = (key: string) => {
+  if (key === 'focus') focusProblems.value = true
+  else if (key === 'trace') enterTrace(worstServiceId.value ?? undefined)
+  else if (key.startsWith('open:')) selectedId.value = key.slice(5)
+}
+
 // ── Node presentation ───────────────────────────────────────────────────────
 const kindIcon = (kind: Kind) => ({
   gateway: RuntimeDedicatedCloudIcon,
@@ -524,7 +576,7 @@ watch(() => [layout.value.width, layout.value.height, mode.value], () => nextTic
 // ── Path trace (separate mode) ────────────────────────────────────────────────
 const tracedId = ref<string | null>(null)
 const tracedService = computed(() => props.services.find(s => s.id === tracedId.value) || null)
-const enterTrace = () => { mode.value = 'trace'; tracedId.value = props.services[0]?.id ?? null }
+const enterTrace = (serviceId?: string) => { mode.value = 'trace'; tracedId.value = serviceId ?? props.services[0]?.id ?? null }
 const exitTrace = () => { mode.value = 'map'; tracedId.value = null }
 
 const servicePathTone = (s: ServicePath): Tone => {
@@ -535,6 +587,25 @@ const servicePathTone = (s: ServicePath): Tone => {
     conn ? connTone(conn.status) : 'error',
     targetToneOf(s.target.status),
   ])
+}
+
+// Worst-health service path — what KAi's "Trace the broken path" jumps to.
+const worstServiceId = computed(() => {
+  const svcs = [...props.services].sort((a, b) => rank(servicePathTone(b)) - rank(servicePathTone(a)))
+  return svcs[0]?.id ?? null
+})
+
+// Contextual trace: from a selected node, find the service path it sits on.
+const serviceForNode = (n: FNode): string | null => {
+  if (n.kind === 'target') return props.services.find(s => s.target.name === n.name)?.id ?? null
+  if (n.kind === 'connectivity') return props.services.find(s => s.connectionId === n.id.slice(5))?.id ?? null
+  if (n.kind === 'dns') return props.services.find(s => s.dnsConfigId === n.id.slice(4))?.id ?? null
+  if (n.kind === 'gateway') return props.services.find(s => s.gatewayName === n.name)?.id ?? props.services[0]?.id ?? null
+  return null
+}
+const traceFromNode = (n: FNode) => {
+  const id = serviceForNode(n)
+  if (id) { selectedId.value = null; enterTrace(id) }
 }
 
 interface TraceHop { key: string; kicker: string; title: string; sub: string; tone: Tone; status: string }
@@ -588,6 +659,20 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 
   .ncm-caption-dim { color: $kui-color-text-neutral; margin-left: $kui-space-30; }
 }
+
+.ncm-kai { margin-bottom: -$kui-space-30; }
+.ncm-hint {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  margin: $kui-space-0;
+}
+.ncm-trace-head {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-50;
+}
+.ncm-trace-headtext { color: $kui-color-text-neutral; font-size: $kui-font-size-30; }
+.ncm-detail-cta { display: flex; }
 
 // ── Pannable topology canvas ────────────────────────────────────────────────
 .flowcanvas {
