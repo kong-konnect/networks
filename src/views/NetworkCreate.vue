@@ -18,14 +18,6 @@
     </template>
 
     <div class="network-create">
-      <div class="create-layout">
-        <div class="create-main">
-      <!-- Orientation (not a blocking gate) -->
-      <KAlert
-        appearance="info"
-        message="A network is provisioned by Kong and takes 45 minutes or more to become ready. Region and CIDR range are permanent — they can't be changed after creation."
-      />
-
       <KaiSummaryCard
         v-if="kaiCfg.shown.value"
         :loading="kaiCfg.loading.value"
@@ -137,6 +129,17 @@
             >
               {{ cidrWarning }}
             </p>
+            <button type="button" class="cidr-help-toggle" @click="showCidrHelp = !showCidrHelp">
+              <component :is="showCidrHelp ? ChevronUpIcon : ChevronDownIcon" :size="KUI_ICON_SIZE_20" decorative />
+              {{ showCidrHelp ? 'Hide CIDR requirements' : 'Show CIDR requirements' }}
+            </button>
+            <div v-if="showCidrHelp" class="cidr-help">
+              <ul>
+                <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
+                <li><strong>Private IP range:</strong> the block must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
+                <li>Don't overlap ranges already used by your organization — overlaps break VPC peering. Reserved: 10.100.0.0/16, 172.17.0.0/16.</li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -307,31 +310,6 @@
           </KButton>
         </template>
       </WizardFooter>
-        </div>
-
-        <div class="side-rail">
-          <!-- Persistent CIDR guidance — getting the CIDR right matters, so keep it visible -->
-          <aside class="help-panel" data-testid="cidr-help-panel">
-            <div class="help-panel-head">
-              <InfoIcon :size="KUI_ICON_SIZE_30" decorative />
-              <h3 class="help-panel-title">Choosing a CIDR block</h3>
-            </div>
-            <p class="help-panel-text">A CIDR block defines the range of IP addresses available for your Dedicated Cloud Gateway. It can't be changed after creation, and shouldn't overlap with CIDR blocks in your own cloud networks.</p>
-
-            <h4 class="help-panel-subtitle">Requirements</h4>
-            <ul class="help-panel-list">
-              <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
-              <li><strong>Private IP range:</strong> the block must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
-            </ul>
-
-            <h4 class="help-panel-subtitle">Avoid</h4>
-            <ul class="help-panel-list">
-              <li>Ranges already used by your organization — overlaps break VPC peering.</li>
-              <li>Reserved ranges 10.100.0.0/16 and 172.17.0.0/16.</li>
-            </ul>
-          </aside>
-        </div>
-      </div>
     </div>
 
     <!-- Config-as-code on demand — opened from the footer, not shown inline -->
@@ -349,7 +327,7 @@
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { ChevronDownIcon, InfoIcon, ProgressIcon, SparklesIcon } from '@kong/icons'
+import { ChevronDownIcon, ChevronUpIcon, ProgressIcon, SparklesIcon } from '@kong/icons'
 import {
   KAlert,
   KBadge,
@@ -392,6 +370,7 @@ const form = reactive({
 
 const showConnectivity = ref(false)
 const showDns = ref(false)
+const showCidrHelp = ref(false)
 
 const connTypeOptions = [
   { label: 'VPC peering', value: 'peering' },
@@ -568,90 +547,52 @@ const handleCreate = () => {
 <style scoped lang="scss">
 @use "@kong/design-tokens/tokens/scss/variables" as *;
 
+// Single column, centered — one balanced setup structure shared across create/add flows.
 .network-create {
-  max-width: 1120px;
-}
-
-// Two columns: the form on the left, persistent guidance on the right.
-.create-layout {
-  align-items: start;
-  display: grid;
-  gap: $kui-space-80;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
-
-  @media (max-width: 900px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.create-main {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
-  min-width: 0;
+  margin: $kui-space-0 auto;
+  max-width: 760px;
 }
 
-// Right rail holds the CIDR guidance + the live config panel; the rail sticks.
-.side-rail {
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-60;
-  position: sticky;
-  top: $kui-space-70;
+// "Show CIDR requirements" disclosure — the ONE place the CIDR rules live.
+.cidr-help-toggle {
+  align-items: center;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: $kui-color-text-primary;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  padding: $kui-space-0;
 
-  @media (max-width: 900px) {
-    position: static;
-  }
+  &:hover { text-decoration: underline; }
 }
 
-.help-panel {
+.cidr-help {
   background-color: $kui-color-background-neutral-weakest;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-40;
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-40;
-  padding: $kui-space-70;
+  border-radius: $kui-border-radius-30;
+  margin-top: $kui-space-30;
+  padding: $kui-space-50 $kui-space-60;
 
-  .help-panel-head {
-    align-items: center;
-    color: $kui-color-text-primary;
-    display: flex;
-    gap: $kui-space-30;
-  }
-
-  .help-panel-title {
-    color: $kui-color-text;
-    font-size: $kui-font-size-40;
-    font-weight: $kui-font-weight-semibold;
-    margin: $kui-space-0;
-  }
-
-  .help-panel-text {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-30;
-    line-height: $kui-line-height-40;
-    margin: $kui-space-0;
-  }
-
-  .help-panel-subtitle {
-    color: $kui-color-text;
-    font-size: $kui-font-size-30;
-    font-weight: $kui-font-weight-semibold;
-    margin: $kui-space-30 $kui-space-0 $kui-space-0;
-  }
-
-  .help-panel-list {
+  ul {
     color: $kui-color-text-neutral;
     display: flex;
     flex-direction: column;
     font-size: $kui-font-size-30;
-    gap: $kui-space-20;
+    gap: $kui-space-30;
     line-height: $kui-line-height-40;
     margin: $kui-space-0;
-    padding-left: $kui-space-70;
+    padding-left: $kui-space-60;
   }
+
+  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
 }
+
 .form-card {
   background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;

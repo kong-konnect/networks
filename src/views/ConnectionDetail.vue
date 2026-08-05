@@ -50,50 +50,20 @@
       </KDropdown>
     </template>
 
-    <div class="conn-subheader">
-      <p class="conn-subtitle">{{ connectionTypeLabel(connection.type) }}</p>
-      <p class="conn-lastchecked">Last checked {{ timeAgo(connection.lastCheckedAt) }}</p>
-    </div>
-
     <div class="detail-stack">
-    <!-- State banner -->
-    <KAlert
-      v-if="connection.status === 'ready'"
-      appearance="success"
-      message="Private ingress is active. Customer clients can reach this gateway through the resource endpoint."
-    >
-      <template #title>Connection ready</template>
-    </KAlert>
-    <KAlert
-      v-else-if="connection.status === 'error'"
-      appearance="danger"
-      :message="connection.errorMessage || 'This connection has an error.'"
-    >
-      <template #title>Connection error</template>
-    </KAlert>
-    <KAlert
-      v-else-if="isPending"
-      appearance="warning"
-      message="Kong has provisioned its side. Complete the customer-side setup to activate this connection."
-    >
-      <template #title>Pending customer action</template>
-    </KAlert>
-
-    <!-- KAi remediation when this connection isn't healthy — compact, one-liner by default -->
-    <KaiSummaryCard
-      v-if="connection.status !== 'ready' && kaiOpen"
-      title="What KAi found"
-      :insights="kaiInsights"
+    <!-- KAi page status — severity reflects the connection's state -->
+    <KaiStatusBar
+      :severity="kaiSeverity"
       :one-liner="kaiOneLiner"
+      :insights="kaiInsights"
       :actions="kaiActions"
-      initial-collapsed
+      :start-expanded="connection.status !== 'ready'"
       data-testid="conn-kai-card"
       @action="onKaiAction"
-      @close="kaiOpen = false"
     />
 
-    <!-- Details -->
-    <KCard title="Details">
+    <!-- About this connection -->
+    <KCard title="About this connection">
       <ConfigCardDisplay :property-collections="detailCollections" />
     </KCard>
 
@@ -133,17 +103,6 @@
           </div>
         </div>
       </div>
-    </KCard>
-
-    <!-- Customer-side setup / next step -->
-    <KCard v-if="isPending || connection.status === 'error'" title="Customer-side setup">
-      <p class="setup-copy">{{ customerSetupCopy }}</p>
-      <a class="row-action" href="#" @click.prevent>View AWS setup guide</a>
-    </KCard>
-
-    <!-- Ready guidance -->
-    <KCard v-else-if="connection.status === 'ready'" title="Next step">
-      <p class="setup-copy">{{ readyGuidanceCopy }}</p>
     </KCard>
 
     <!-- Edit allowed accounts -->
@@ -206,8 +165,8 @@ import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
+import KaiStatusBar from '@/components/KaiStatusBar.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiStatusBar.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import {
   connectionTypeLabel,
@@ -331,21 +290,27 @@ const eventColumns: DetailColumn[] = [
   { key: 'result', label: 'Result' },
 ]
 
-// ── KAi remediation (when this connection isn't healthy) ──────────────────────
-const kaiOpen = ref(true)
+// ── KAi page status (severity reflects the connection's state) ────────────────
+const kaiSeverity = computed<'critical' | 'warning' | 'healthy'>(() => {
+  const s = connection.value?.status
+  if (s === 'error') return 'critical'
+  if (s === 'ready') return 'healthy'
+  return 'warning'
+})
 const kaiOneLiner = computed(() => {
   const c = connection.value
   if (!c) return ''
   if (c.status === 'error') return `${c.name} has an error — ${c.errorMessage || 'the target isn\'t reachable'}.`
   if (isPending.value) return `${c.name} is waiting on your customer-side setup to activate.`
-  return `${c.name} is still being set up. No action needed yet.`
+  if (c.status === 'ready') return `${c.name} is active — traffic can flow through this connection.`
+  return `${c.name} is still being set up.`
 })
 const kaiInsights = computed<KaiInsight[]>(() => {
   const c = connection.value
   if (!c) return []
   if (c.status === 'error') {
     return [
-      { lead: 'Error:', text: c.errorMessage || 'this connection isn\'t working.', tone: 'critical' },
+      { lead: 'Error:', text: c.errorMessage || 'this connection isn\'t working.' },
       { lead: 'To fix:', text: customerSetupCopy.value },
     ]
   }
@@ -354,6 +319,9 @@ const kaiInsights = computed<KaiInsight[]>(() => {
       { lead: 'Waiting on you:', text: 'Kong has provisioned its side. The connection activates once you finish the customer-side setup.' },
       { lead: 'To fix:', text: customerSetupCopy.value },
     ]
+  }
+  if (c.status === 'ready') {
+    return [{ lead: 'Active:', text: readyGuidanceCopy.value }]
   }
   return [{ text: 'Kong is still setting this connection up. No action is needed yet.' }]
 })

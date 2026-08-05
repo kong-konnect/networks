@@ -19,8 +19,6 @@
     </template>
 
     <div class="dns-create">
-      <div class="create-layout">
-        <div class="create-main">
           <KCard class="context-banner">
             <div class="context-row">
               <span class="context-label">Network</span>
@@ -108,26 +106,6 @@
               Cancel
             </KButton>
           </WizardFooter>
-        </div>
-
-        <div class="side-rail">
-          <aside class="help-panel" data-testid="dns-help-panel">
-            <div class="help-panel-head">
-              <InfoIcon :size="KUI_ICON_SIZE_30" decorative />
-              <h3 class="help-panel-title">About private DNS</h3>
-            </div>
-            <p class="help-panel-text">Private DNS lets a gateway resolve private hostnames — like an internal service domain — to addresses reachable over this network's private connectivity.</p>
-
-            <h4 class="help-panel-subtitle">Types</h4>
-            <ul class="help-panel-list">
-              <li><strong>Private hosted zone</strong> — Kong hosts the zone and answers queries for your domain.</li>
-              <li><strong>Outbound resolver</strong> — Kong forwards queries to a resolver you run in your cloud.</li>
-            </ul>
-
-            <p class="help-panel-text">DNS and private connectivity are related but configured separately. A hostname only resolves once its underlying connection is ready.</p>
-          </aside>
-        </div>
-      </div>
     </div>
   </PageLayout>
 
@@ -145,8 +123,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { InfoIcon, ProgressIcon, SparklesIcon } from '@kong/icons'
+import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
+import { ProgressIcon, SparklesIcon } from '@kong/icons'
 import {
   KCard,
   KInput,
@@ -232,37 +210,17 @@ const handleCreate = () => {
 </script>
 
 <style scoped lang="scss">
+// Single column, centered — same balanced setup structure as create-network.
 .dns-create {
-  padding-top: $kui-space-60;
-}
-
-.create-layout {
-  display: grid;
-  gap: $kui-space-80;
-  grid-template-columns: minmax(0, 1fr) 320px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.create-main {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
-  min-width: 0;
-}
-
-.context-row-wrap {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-50;
-  justify-content: space-between;
+  margin: $kui-space-0 auto;
+  max-width: 760px;
+  padding-top: $kui-space-60;
 }
 
 .context-banner {
-  flex: 1;
-
   :deep(.card-content) {
     display: flex;
     gap: $kui-space-90;

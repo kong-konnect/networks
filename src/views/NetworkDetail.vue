@@ -2,7 +2,6 @@
   <PageLayout
     v-if="network"
     :title="network.name"
-    :subtitle="networkSubtitle"
     :breadcrumbs="breadcrumbs"
     :back-to="{ name: 'networks-list' }"
   >
@@ -177,9 +176,9 @@
         </section>
 
         <!-- KAi reassurance while provisioning -->
-        <KaiSummaryCard
-          title="KAi is watching this setup"
-          :insights="kaiInitInsights"
+        <KaiStatusBar
+          severity="info"
+          one-liner="No action needed — provisioning takes about 45 minutes. KAi will flag it here if setup needs you."
           data-testid="kai-initializing"
         />
 
@@ -205,18 +204,16 @@
      <div class="nd-body">
       <KTabs v-model="activeTab" :tabs="tabs" />
 
-      <!-- KAi network summary — shown on every tab, collapsed to a one-liner by default -->
-      <KaiSummaryCard
-        v-if="kaiShown"
+      <!-- KAi page status — a thin, dynamic status bar reflecting this network's health -->
+      <KaiStatusBar
         class="nd-kai"
-        title="Network health summary"
-        :insights="kaiInsights"
+        :severity="kaiSeverity"
+        :count-label="kaiCountLabel"
         :one-liner="kaiOneLiner"
+        :insights="kaiInsights"
         :actions="kaiActions"
-        initial-collapsed
         data-testid="kai-network-summary"
         @action="onKaiAction"
-        @close="kaiShown = false"
       />
 
       <!-- ── Overview tab ─────────────────────────────────────── -->
@@ -665,8 +662,8 @@ import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
+import KaiStatusBar from '@/components/KaiStatusBar.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiStatusBar.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
@@ -707,44 +704,52 @@ const directionBreakdown = computed(() => {
     .filter(b => b.count > 0)
 })
 
-// ── KAi contextual summary (prototype) ────────────────────────────────────────
-// One network-health card, shown across every tab collapsed to a one-liner (expandable).
-// Content is derived from the network's ACTUAL problem state, with actions that deep-link.
-const kaiShown = ref(true)
-
+// ── KAi page status (prototype) ───────────────────────────────────────────────
+// A thin, dynamic status bar reflecting THIS network's real health — severity, a
+// one-line summary, and (expanded) the specifics + deep-link actions.
 const kaiProblems = computed(() => ({
   dnsErr: dnsList.value.filter(d => d.status === 'error'),
   dnsPending: dnsList.value.filter(d => d.status === 'pending'),
   connBad: connections.value.filter(c => c.status === 'error' || c.status === 'pending-user-action' || c.status === 'pending-acceptance'),
+  connErr: connections.value.filter(c => c.status === 'error'),
   total: dnsList.value.length + connections.value.length,
 }))
+const kaiCount = computed(() => {
+  const p = kaiProblems.value
+  return p.dnsErr.length + p.dnsPending.length + p.connBad.length
+})
+const kaiSeverity = computed<'critical' | 'warning' | 'healthy'>(() => {
+  const p = kaiProblems.value
+  if (p.dnsErr.length || p.connErr.length) return 'critical'
+  if (kaiCount.value > 0) return 'warning'
+  return 'healthy'
+})
+const kaiCountLabel = computed(() =>
+  kaiCount.value === 0 ? '' : `${kaiCount.value} ${kaiCount.value === 1 ? 'issue' : 'issues'}:`)
 
 const kaiInsights = computed<KaiInsight[]>(() => {
   const p = kaiProblems.value
-  const count = p.dnsErr.length + p.dnsPending.length + p.connBad.length
-  if (count === 0) {
+  if (kaiCount.value === 0) {
     return [{ lead: 'All healthy:', text: `every gateway, connection, and DNS record on ${network.value?.name} is resolving and ready.` }]
   }
-  const lines: KaiInsight[] = [
-    { lead: 'Needs attention:', text: `${count} of ${p.total} relationships on this network aren't healthy.`, tone: 'critical' },
-  ]
+  const lines: KaiInsight[] = []
   if (p.dnsErr.length) {
     lines.push({ lead: 'DNS not resolving:', text: `${p.dnsErr[0].name} is unreachable — its resolver can't be reached from the network.` })
   }
   if (p.connBad.length) {
     lines.push({ lead: 'Connectivity:', text: `${p.connBad[0].name} is ${statusLabel(p.connBad[0].status).toLowerCase()}, so paths that depend on it can't complete.` })
-  } else if (p.dnsPending.length) {
-    lines.push({ text: `${p.dnsPending[0].name} is still provisioning and should resolve shortly.` })
+  }
+  if (p.dnsPending.length) {
+    lines.push({ lead: 'Provisioning:', text: `${p.dnsPending[0].name} is still being set up and should resolve shortly.` })
   }
   return lines
 })
 
 const kaiOneLiner = computed(() => {
   const p = kaiProblems.value
-  const count = p.dnsErr.length + p.dnsPending.length + p.connBad.length
-  return count === 0
+  return kaiCount.value === 0
     ? `${network.value?.name} is healthy — nothing needs attention.`
-    : `${count} relationships need attention — DNS and connectivity issues on ${network.value?.name}.`
+    : `DNS and connectivity issues on ${network.value?.name}${p.dnsErr[0] ? ` — ${p.dnsErr[0].name} isn't resolving` : ''}.`
 })
 
 const kaiActions = computed<KaiAction[]>(() => {
@@ -755,11 +760,6 @@ const kaiActions = computed<KaiAction[]>(() => {
   actions.push({ key: 'ask', label: 'Ask KAi about this' })
   return actions
 })
-
-// Reassurance shown while the network is provisioning.
-const kaiInitInsights = computed<KaiInsight[]>(() => [
-  { text: 'No action needed — provisioning a network takes about 45 minutes. I\'m monitoring the setup and will flag it right here if anything needs you.' },
-])
 
 const onKaiAction = (key: string) => {
   if (key === 'view-dns' && kaiProblems.value.dnsErr[0]) {

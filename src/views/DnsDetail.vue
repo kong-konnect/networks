@@ -31,44 +31,18 @@
       </KButton>
     </template>
 
-    <p class="dns-subtitle">{{ typeLabel(dns.type) }} · {{ dns.usedFor }}</p>
-    <p
-      v-if="dns.status !== 'ready' && dns.lastCheckedAt"
-      class="dns-lastchecked"
-    >
-      Last checked {{ timeAgo(dns.lastCheckedAt) }}
-    </p>
-
-    <KAlert
-      v-if="dns.status === 'error'"
-      appearance="danger"
-      :message="dns.resolverDetails || 'This DNS configuration has an error.'"
-      data-testid="dns-error-banner"
-    >
-      <template #title>DNS configuration error</template>
-    </KAlert>
-    <KAlert
-      v-else-if="dns.status === 'pending'"
-      appearance="info"
-      message="This DNS configuration is still provisioning. It resolves private names once ready."
-    >
-      <template #title>Provisioning</template>
-    </KAlert>
-
-    <!-- KAi remediation when this DNS isn't healthy — compact, one-liner by default -->
-    <KaiSummaryCard
-      v-if="dns.status !== 'ready' && kaiOpen"
-      title="What KAi found"
-      :insights="kaiInsights"
+    <!-- KAi page status — severity reflects this DNS record's state -->
+    <KaiStatusBar
+      :severity="kaiSeverity"
       :one-liner="kaiOneLiner"
+      :insights="kaiInsights"
       :actions="kaiActions"
-      initial-collapsed
+      :start-expanded="dns.status !== 'ready'"
       data-testid="dns-kai-card"
       @action="onKaiAction"
-      @close="kaiOpen = false"
     />
 
-    <KCard title="Details">
+    <KCard title="About this private DNS">
       <ConfigCardDisplay :property-collections="detailCollections" />
     </KCard>
 
@@ -125,8 +99,8 @@ import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
+import KaiStatusBar from '@/components/KaiStatusBar.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiStatusBar.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import { connectionTypeLabel, timeAgo } from '@/utils/connectionDisplay'
 import type { DnsType, DnsStatus } from '@/types'
@@ -155,12 +129,18 @@ const eventColumns: DetailColumn[] = [
   { key: 'result', label: 'Result' },
 ]
 
-// ── KAi remediation (when this DNS isn't healthy) ─────────────────────────────
-const kaiOpen = ref(true)
+// ── KAi page status (severity reflects this DNS record's state) ───────────────
+const kaiSeverity = computed<'critical' | 'warning' | 'healthy'>(() => {
+  const s = dns.value?.status
+  if (s === 'error') return 'critical'
+  if (s === 'ready') return 'healthy'
+  return 'warning'
+})
 const kaiOneLiner = computed(() => {
   const d = dns.value
   if (!d) return ''
   if (d.status === 'error') return `${d.name} isn't resolving — its resolver is unreachable from the network.`
+  if (d.status === 'ready') return `${d.name} is resolving normally.`
   return `${d.name} is still provisioning and should resolve shortly.`
 })
 const kaiInsights = computed<KaiInsight[]>(() => {
@@ -168,9 +148,12 @@ const kaiInsights = computed<KaiInsight[]>(() => {
   if (!d) return []
   if (d.status === 'error') {
     return [
-      { lead: 'Not resolving:', text: `${d.name} can't be reached — ${d.resolverDetails || 'the resolver is unreachable from this network.'}`, tone: 'critical' },
+      { lead: 'Not resolving:', text: `${d.name} can't be reached — ${d.resolverDetails || 'the resolver is unreachable from this network.'}` },
       { lead: 'To fix:', text: 'confirm the resolver endpoint (or hosted zone) exists and is associated with this network, then re-check the status.' },
     ]
+  }
+  if (d.status === 'ready') {
+    return [{ lead: 'Resolving:', text: `${d.name} is resolving private names through this network.` }]
   }
   return [
     { lead: 'Provisioning:', text: `${d.name} is still being set up and should resolve shortly. No action is needed.` },
