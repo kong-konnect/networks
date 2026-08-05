@@ -1,198 +1,216 @@
 <template>
   <div class="ncm">
-    <!-- ── KAi reads the map (map mode only) ───────────────────────────────── -->
-    <template v-if="mode === 'map'">
-      <KaiSummaryCard
-        v-if="kaiOpen"
-        class="ncm-kai"
-        title="KAi read this map"
-        :insights="kaiInsights"
-        :one-liner="kaiOneLiner"
-        :actions="kaiActions"
-        :initial-collapsed="problemCount === 0"
-        data-testid="ncm-kai"
-        @action="onKaiAction"
-        @close="kaiOpen = false"
-      />
-      <p class="ncm-hint">Drag to pan · scroll with {{ modKeyLabel }} to zoom · select a node for details.</p>
-    </template>
+    <!-- ── KAi reads the map — collapsed by default so the map stays above the fold ── -->
+    <KaiSummaryCard
+      v-if="kaiOpen"
+      class="ncm-kai"
+      title="KAi read this map"
+      :insights="kaiInsights"
+      :one-liner="kaiOneLiner"
+      :actions="kaiActions"
+      initial-collapsed
+      data-testid="ncm-kai"
+      @action="onKaiAction"
+      @close="kaiOpen = false"
+    />
 
-    <!-- Trace mode gets a quiet back control, not a primary action. -->
-    <div v-else class="ncm-trace-head">
-      <KButton appearance="tertiary" size="small" data-testid="ncm-back-to-map" @click="exitTrace">
-        <ArrowLeftIcon :size="KUI_ICON_SIZE_20" decorative />
-        Back to map
-      </KButton>
-      <span class="ncm-trace-headtext">Tracing one service end to end.</span>
+    <!-- ── Pannable topology canvas ────────────────────────────────────────── -->
+    <div
+      ref="viewportEl"
+      class="flowcanvas"
+      :class="{ 'flowcanvas--grabbing': dragging }"
+      data-testid="ncm-canvas"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
+      @wheel="onWheel"
+    >
+      <div class="flow-controls" @pointerdown.stop>
+        <KButton appearance="secondary" size="small" data-testid="ncm-zoom-in" aria-label="Zoom in" @click="zoomButton(1.2)">
+          <AddIcon :size="KUI_ICON_SIZE_20" decorative />
+        </KButton>
+        <KButton appearance="secondary" size="small" data-testid="ncm-zoom-out" aria-label="Zoom out" @click="zoomButton(1 / 1.2)">
+          <RemoveIcon :size="KUI_ICON_SIZE_20" decorative />
+        </KButton>
+        <KButton appearance="secondary" size="small" data-testid="ncm-zoom-fit" @click="fit">
+          Fit
+        </KButton>
+        <KButton
+          v-if="healthyCount"
+          :appearance="focusProblems ? 'primary' : 'secondary'"
+          size="small"
+          data-testid="ncm-focus-problems"
+          @click="focusProblems = !focusProblems"
+        >
+          {{ focusProblems ? 'Show all' : 'Focus problems' }}
+        </KButton>
+      </div>
+
+      <span class="flow-hint">Drag to pan · scroll with {{ modKeyLabel }} to zoom</span>
+
+      <div class="flow-stage" :style="stageStyle">
+        <svg class="flow-edges" :width="layout.width" :height="layout.height" :viewBox="`0 0 ${layout.width} ${layout.height}`">
+          <defs>
+            <marker v-for="t in tones" :id="`arrow-${t}`" :key="t" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" :class="`edge-arrow edge-arrow--${t}`" />
+            </marker>
+          </defs>
+          <path
+            v-for="e in layout.edges"
+            :key="e.id"
+            :d="e.d"
+            class="flow-edge"
+            :class="[`flow-edge--${e.tone}`, { 'flow-edge--dim': isDim(e.tone) }]"
+            :marker-end="`url(#arrow-${e.tone})`"
+          />
+        </svg>
+
+        <button
+          v-for="n in layout.nodes"
+          :key="n.id"
+          type="button"
+          class="fnode"
+          :class="[
+            `fnode--${n.kind}`,
+            { 'fnode--selected': selectedId === n.id, 'fnode--dim': isDim(n.tone) },
+          ]"
+          :style="nodeStyle(n)"
+          :data-testid="`ncm-node-${n.id}`"
+          @click="onNodeClick(n)"
+        >
+          <span class="fnode-ic" :class="`fnode-ic--${n.kind}`">
+            <component :is="kindIcon(n.kind)" :size="KUI_ICON_SIZE_20" decorative />
+          </span>
+          <span class="fnode-text">
+            <span class="fnode-kicker">
+              {{ kindLabel(n.kind) }}
+              <span v-if="props.directional && n.dir" class="fnode-dir">· {{ directionCategoryLabel[n.dir] }}</span>
+            </span>
+            <span class="fnode-name">{{ n.name }}</span>
+            <span class="fnode-sub">{{ n.sub }}</span>
+          </span>
+          <span class="fnode-status">
+            <span class="fnode-dot" :class="`fnode-dot--${n.tone}`" />
+          </span>
+        </button>
+      </div>
     </div>
 
-    <!-- ── MAP MODE: pannable topology canvas ──────────────────────────────── -->
-    <template v-if="mode === 'map'">
-      <div
-        ref="viewportEl"
-        class="flowcanvas"
-        :class="{ 'flowcanvas--grabbing': dragging }"
-        data-testid="ncm-canvas"
-        @pointerdown="onPointerDown"
-        @pointermove="onPointerMove"
-        @pointerup="onPointerUp"
-        @pointercancel="onPointerUp"
-        @wheel="onWheel"
-      >
-        <div class="flow-controls" @pointerdown.stop>
-          <KButton appearance="secondary" size="small" data-testid="ncm-zoom-in" aria-label="Zoom in" @click="zoomButton(1.2)">
-            <AddIcon :size="KUI_ICON_SIZE_20" decorative />
-          </KButton>
-          <KButton appearance="secondary" size="small" data-testid="ncm-zoom-out" aria-label="Zoom out" @click="zoomButton(1 / 1.2)">
-            <RemoveIcon :size="KUI_ICON_SIZE_20" decorative />
-          </KButton>
-          <KButton appearance="secondary" size="small" data-testid="ncm-zoom-fit" @click="fit">
-            Fit
-          </KButton>
-          <KButton
-            v-if="healthyCount"
-            :appearance="focusProblems ? 'primary' : 'secondary'"
-            size="small"
-            data-testid="ncm-focus-problems"
-            @click="focusProblems = !focusProblems"
-          >
-            {{ focusProblems ? 'Show all' : 'Focus problems' }}
-          </KButton>
-        </div>
+    <div class="ncm-legendbar">
+      <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--ready" />Healthy</span>
+      <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--pending" />Pending / needs action</span>
+      <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--error" />Error</span>
+      <span class="ncm-legend-flow">Traffic flows left to right.</span>
+    </div>
 
-        <div class="flow-stage" :style="stageStyle">
-          <svg class="flow-edges" :width="layout.width" :height="layout.height" :viewBox="`0 0 ${layout.width} ${layout.height}`">
-            <defs>
-              <marker v-for="t in tones" :id="`arrow-${t}`" :key="t" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" :class="`edge-arrow edge-arrow--${t}`" />
-              </marker>
-            </defs>
-            <path
-              v-for="e in layout.edges"
-              :key="e.id"
-              :d="e.d"
-              class="flow-edge"
-              :class="[`flow-edge--${e.tone}`, { 'flow-edge--dim': isDim(e.tone) }]"
-              :marker-end="`url(#arrow-${e.tone})`"
-            />
-          </svg>
-
-          <button
-            v-for="n in layout.nodes"
-            :key="n.id"
-            type="button"
-            class="fnode"
-            :class="[
-              `fnode--${n.kind}`,
-              { 'fnode--selected': selectedId === n.id, 'fnode--dim': isDim(n.tone) },
-            ]"
-            :style="nodeStyle(n)"
-            :data-testid="`ncm-node-${n.id}`"
-            @click="onNodeClick(n)"
-          >
-            <span class="fnode-ic" :class="`fnode-ic--${n.kind}`">
-              <component :is="kindIcon(n.kind)" :size="KUI_ICON_SIZE_20" decorative />
-            </span>
-            <span class="fnode-text">
-              <span class="fnode-kicker">
-                {{ kindLabel(n.kind) }}
-                <span v-if="props.directional && n.dir" class="fnode-dir">· {{ directionCategoryLabel[n.dir] }}</span>
-              </span>
-              <span class="fnode-name">{{ n.name }}</span>
-              <span class="fnode-sub">{{ n.sub }}</span>
-            </span>
-            <span class="fnode-status">
-              <span class="fnode-dot" :class="`fnode-dot--${n.tone}`" />
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div class="ncm-legendbar">
-        <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--ready" />Healthy</span>
-        <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--pending" />Pending / needs action</span>
-        <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--error" />Error</span>
-        <span class="ncm-legend-flow">Traffic flows left to right.</span>
-      </div>
-    </template>
-
-    <!-- ── TRACE MODE: one path, end to end ────────────────────────────────── -->
-    <template v-else>
-      <div class="ncm-trace-picker">
-        <span class="ncm-trace-label">Service</span>
-        <div class="ncm-trace-chips">
-          <button
-            v-for="s in services"
-            :key="s.id"
-            type="button"
-            class="ncm-trace-chip"
-            :class="{ 'ncm-trace-chip--active': tracedId === s.id }"
-            :data-testid="`ncm-trace-${s.id}`"
-            @click="tracedId = s.id"
-          >
-            <span class="ncm-dot" :class="`ncm-dot--${servicePathTone(s)}`" />
-            {{ s.name }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="tracedService" class="ncm-trace" data-testid="ncm-trace">
-        <div class="ncm-trace-chain">
-          <template v-for="(hop, i) in traceHops" :key="hop.key">
-            <div
-              class="ncm-hop"
-              :class="[`ncm-hop--${hop.tone}`, { 'ncm-hop--broken': brokenHop && brokenHop.key === hop.key }]"
-            >
-              <span class="ncm-node-kicker">{{ hop.kicker }}</span>
-              <span class="ncm-hop-title">{{ hop.title }}</span>
-              <span class="ncm-node-sub">{{ hop.sub }}</span>
-              <span class="ncm-node-status" :class="`ncm-node-status--${hop.tone}`">{{ hop.status }}</span>
-            </div>
-            <span
-              v-if="i < traceHops.length - 1"
-              class="ncm-hop-arrow"
-              :class="`ncm-hop-arrow--${traceHops[i + 1].tone}`"
-            >→</span>
-          </template>
-        </div>
-        <div class="ncm-trace-summary" :class="`ncm-trace-summary--${traceSummaryTone}`">
-          {{ traceSummary }}
-        </div>
-      </div>
-      <p v-else class="ncm-trace-empty">Pick a service above to trace its path through the network.</p>
-    </template>
-
-    <!-- ── Detail slideout for the selected node ───────────────────────────── -->
+    <!-- ── Detail slideout: Details · Impact · Path ────────────────────────── -->
     <KSlideout
       :visible="detailOpen"
       :has-overlay="false"
       :close-on-blur="false"
       :title="selectedNode ? selectedNode.name : ''"
-      max-width="380px"
+      max-width="420px"
       data-testid="ncm-detail"
       @close="selectedId = null"
     >
       <div v-if="selectedNode" class="ncm-detail">
         <div class="ncm-detail-head">
-          <span class="ncm-detail-kicker">{{ kindLabel(selectedNode.kind) }}</span>
+          <span class="ncm-detail-kicker">
+            {{ kindLabel(selectedNode.kind) }}
+            <template v-if="props.directional && selectedNode.dir"> · {{ directionCategoryLabel[selectedNode.dir] }}</template>
+          </span>
           <KBadge :appearance="toneAppearance(selectedNode.tone)">{{ selectedNode.statusLabel }}</KBadge>
         </div>
-        <dl class="ncm-detail-facts">
-          <template v-for="f in nodeFacts(selectedNode)" :key="f.label">
-            <dt>{{ f.label }}</dt>
-            <dd>{{ f.value }}</dd>
-          </template>
-        </dl>
-        <div v-if="nodeAction(selectedNode)" class="ncm-detail-action" :class="`ncm-detail-action--${selectedNode.tone}`">
-          <span class="ncm-detail-action-label">Recommended action</span>
-          <p class="ncm-detail-action-text">{{ nodeAction(selectedNode) }}</p>
+
+        <div class="dtabs" role="tablist">
+          <button
+            v-for="t in detailTabs"
+            :key="t.key"
+            type="button"
+            class="dtab"
+            :class="{ 'dtab--active': detailTab === t.key }"
+            :data-testid="`ncm-tab-${t.key}`"
+            @click="detailTab = t.key"
+          >
+            {{ t.label }}<span v-if="t.count" class="dtab-count">{{ t.count }}</span>
+          </button>
         </div>
 
-        <div v-if="serviceForNode(selectedNode)" class="ncm-detail-cta">
-          <KButton appearance="secondary" data-testid="ncm-detail-trace" @click="traceFromNode(selectedNode)">
-            <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
-            Trace this path
-          </KButton>
+        <!-- Details -->
+        <div v-if="detailTab === 'details'" class="dtab-body">
+          <section v-if="selCause" class="dsec">
+            <span class="dsec-label">Probable cause</span>
+            <p class="dcause">{{ selCause }}</p>
+          </section>
+
+          <section v-if="selReco" class="dreco" :class="`dreco--${selectedNode.tone}`">
+            <span class="dsec-label">Recommended action</span>
+            <p class="dreco-title">{{ selReco.title }}</p>
+            <p class="dreco-detail">{{ selReco.detail }}</p>
+            <KButton
+              v-if="selReco.cta"
+              appearance="primary"
+              size="small"
+              data-testid="ncm-reco-cta"
+              @click="runCta(selReco.cta)"
+            >
+              {{ selReco.cta.label }}
+              <ArrowRightIcon :size="KUI_ICON_SIZE_20" decorative />
+            </KButton>
+          </section>
+
+          <section class="dsec">
+            <span class="dsec-label">Details</span>
+            <dl class="ncm-detail-facts">
+              <template v-for="f in nodeFacts(selectedNode)" :key="f.label">
+                <dt>{{ f.label }}</dt>
+                <dd>{{ f.value }}</dd>
+              </template>
+            </dl>
+          </section>
+        </div>
+
+        <!-- Impact -->
+        <div v-else-if="detailTab === 'impact'" class="dtab-body">
+          <template v-if="selImpact.length">
+            <span class="dsec-label">{{ impactHeading }}</span>
+            <ul class="dimpact">
+              <li v-for="r in selImpact" :key="r.name" class="dimpact-row">
+                <span class="fnode-dot" :class="`fnode-dot--${r.tone}`" />
+                <span class="dimpact-text">
+                  <span class="dimpact-name">{{ r.name }}</span>
+                  <span class="dimpact-meta">{{ r.meta }}</span>
+                </span>
+                <KBadge :appearance="toneAppearance(r.tone)">{{ r.statusLabel }}</KBadge>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="dempty">Nothing else depends on this node.</p>
+        </div>
+
+        <!-- Path -->
+        <div v-else class="dtab-body">
+          <template v-if="selHops.length">
+            <div class="dpath">
+              <template v-for="(h, i) in selHops" :key="h.key">
+                <div class="dhop" :class="{ 'dhop--broken': i === selFirstBroken }">
+                  <span class="dhop-ic" :class="`dhop-ic--${h.tone}`">
+                    <component :is="h.tone === 'ready' ? CheckIcon : WarningIcon" :size="KUI_ICON_SIZE_20" decorative />
+                  </span>
+                  <span class="dhop-text">
+                    <span class="dhop-kicker">{{ h.kicker }}</span>
+                    <span class="dhop-title">{{ h.title }}</span>
+                  </span>
+                </div>
+                <div v-if="i < selHops.length - 1" class="dhop-link" :class="`dhop-link--${selHops[i + 1].tone}`">
+                  {{ transitionLabel(selHops[i + 1]) }}
+                </div>
+              </template>
+            </div>
+            <p class="dpath-summary" :class="`dpath-summary--${selPathTone}`">{{ selPathSummary }}</p>
+          </template>
+          <p v-else class="dempty">This node isn’t on a single traced path.</p>
         </div>
       </div>
     </KSlideout>
@@ -201,12 +219,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { KBadge, KButton, KSlideout } from '@kong/kongponents'
 import {
   ArrowRightIcon,
-  ArrowLeftIcon,
   AddIcon,
   RemoveIcon,
+  CheckIcon,
+  WarningIcon,
   NetworkIcon,
   ConnectionsIcon,
   WorldPrivateIcon,
@@ -243,13 +263,17 @@ const props = withDefaults(defineProps<{
   directional: false,
 })
 
+const router = useRouter()
+const networkId = computed(() => props.network.id)
+
 type Tone = 'ready' | 'pending' | 'error'
 type Kind = 'gateway' | 'network' | 'connectivity' | 'dns' | 'target'
+type DetailTab = 'details' | 'impact' | 'path'
 
 const tones: Tone[] = ['ready', 'pending', 'error']
-const mode = ref<'map' | 'trace'>('map')
 const focusProblems = ref(false)
 const selectedId = ref<string | null>(null)
+const detailTab = ref<DetailTab>('details')
 
 const connTone = (status: Connection['status']): Tone =>
   status === 'ready' ? 'ready' : status === 'error' ? 'error' : 'pending'
@@ -261,8 +285,8 @@ const targetToneOf = (s: 'reachable' | 'unreachable' | 'pending'): Tone =>
   s === 'reachable' ? 'ready' : s === 'unreachable' ? 'error' : 'pending'
 const targetStatusLabel = (s: 'reachable' | 'unreachable' | 'pending') =>
   s === 'reachable' ? 'Reachable' : s === 'unreachable' ? 'Unreachable' : 'Pending'
-const worstTone = (tones: Tone[]): Tone =>
-  tones.includes('error') ? 'error' : tones.includes('pending') ? 'pending' : 'ready'
+const worstTone = (list: Tone[]): Tone =>
+  list.includes('error') ? 'error' : list.includes('pending') ? 'pending' : 'ready'
 
 // ── Network status ────────────────────────────────────────────────────────────
 const netTone = computed<Tone>(() =>
@@ -271,8 +295,6 @@ const netStatusLabel = computed(() =>
   props.network.status === 'ready' ? 'Ready'
     : props.network.status === 'initialising' ? 'Initializing'
       : props.network.status === 'error' ? 'Error' : props.network.status)
-const netStatusAppearance = computed(() =>
-  props.network.status === 'ready' ? 'success' : props.network.status === 'error' ? 'danger' : 'warning')
 const toneAppearance = (tone: Tone) => tone === 'ready' ? 'success' : tone === 'error' ? 'danger' : 'warning'
 
 // ── Layout (deterministic left→right topology) ─────────────────────────────────
@@ -298,7 +320,6 @@ const ROW_GAP = 18
 const PAD = 36
 
 const layout = computed<{ nodes: FNode[]; edges: FEdge[]; width: number; height: number }>(() => {
-  // Build each tier's node list (without positions yet).
   const gwNodes: FNode[] = props.gateways.map(g => mk(`gw-${g.id}`, 'gateway', g.name, 'Dedicated Cloud Gateway', 'ready', 'Ready'))
   const hub: FNode = mk('network', 'network', props.network.name, `${props.network.cloud.toUpperCase()} · ${props.network.regions[0].region}`, netTone.value, netStatusLabel.value)
   const connNodes: FNode[] = props.connections.map(c => {
@@ -309,7 +330,6 @@ const layout = computed<{ nodes: FNode[]; edges: FEdge[]; width: number; height:
   const dnsNodes: FNode[] = props.dnsConfigs.map(d =>
     mk(`dns-${d.id}`, 'dns', d.name, dnsTypeLabel(d.type), dnsTone(d.status), dnsStatusLabel(d.status)))
 
-  // Targets: unique by name, worst tone across the services reaching them.
   const targetMap = new Map<string, { node: FNode; conns: Set<string> }>()
   for (const s of props.services) {
     const key = s.target.name
@@ -327,7 +347,6 @@ const layout = computed<{ nodes: FNode[]; edges: FEdge[]; width: number; height:
   }
   const targetNodes = [...targetMap.values()].map(t => t.node)
 
-  // Tiers, empty ones dropped (hub always present).
   const rawTiers: FNode[][] = [gwNodes, [hub], [...connNodes, ...dnsNodes], targetNodes]
   const tiers = rawTiers.filter(t => t.length > 0)
 
@@ -379,9 +398,6 @@ const healthyCount = computed(() => flowResourceNodes.value.filter(n => n.tone =
 const isDim = (tone: Tone) => focusProblems.value && tone === 'ready'
 
 // ── KAi: read the system map ───────────────────────────────────────────────
-// The AI value here is reading the graph — triage, root cause, and blast
-// radius — not another button. KAi names what's wrong, what it blocks, and its
-// "Try" chips drive the map (focus problems, trace the broken path, open node).
 const rank = (t: Tone) => t === 'error' ? 2 : t === 'pending' ? 1 : 0
 const uniq = (a: string[]) => [...new Set(a)]
 const listJoin = (a: string[]) =>
@@ -390,7 +406,6 @@ const listJoin = (a: string[]) =>
 const problemNodes = computed(() =>
   flowResourceNodes.value.filter(n => n.tone !== 'ready').sort((a, b) => rank(b.tone) - rank(a.tone)))
 
-// Targets a broken connectivity/DNS node cuts off downstream.
 const downstreamTargets = (n: FNode): string[] => {
   if (n.kind === 'connectivity') return uniq(props.services.filter(s => s.connectionId === n.id.slice(5)).map(s => s.target.name))
   if (n.kind === 'dns') return uniq(props.services.filter(s => s.dnsConfigId === n.id.slice(4)).map(s => s.target.name))
@@ -417,15 +432,19 @@ const kaiInsights = computed<KaiInsight[]>(() => {
 const kaiActions = computed<KaiAction[]>(() => {
   const a: KaiAction[] = []
   if (problemNodes.value.length && healthyCount.value) a.push({ key: 'focus', label: 'Show only what needs attention' })
-  if (worstServiceId.value) a.push({ key: 'trace', label: problemNodes.value.length ? 'Trace the broken path' : 'Trace a service path' })
   const top = problemNodes.value[0]
-  if (top) a.push({ key: `open:${top.id}`, label: `Open ${top.name}` })
+  if (top) {
+    a.push({ key: 'trace', label: 'Trace the broken path' })
+    a.push({ key: `open:${top.id}`, label: `Open ${top.name}` })
+  }
   return a
 })
+const openNode = (id: string, tab: DetailTab = 'details') => { selectedId.value = id; detailTab.value = tab }
 const onKaiAction = (key: string) => {
-  if (key === 'focus') focusProblems.value = true
-  else if (key === 'trace') enterTrace(worstServiceId.value ?? undefined)
-  else if (key.startsWith('open:')) selectedId.value = key.slice(5)
+  if (key === 'focus') { focusProblems.value = true; return }
+  const top = problemNodes.value[0]
+  if (key === 'trace' && top) openNode(top.id, 'path')
+  else if (key.startsWith('open:')) openNode(key.slice(5), 'details')
 }
 
 // ── Node presentation ───────────────────────────────────────────────────────
@@ -451,8 +470,18 @@ const detailOpen = computed(() => selectedNode.value !== null)
 const wasPanned = ref(false)
 const onNodeClick = (n: FNode) => {
   if (wasPanned.value) return
-  selectedId.value = selectedId.value === n.id ? null : n.id
+  if (selectedId.value === n.id) { selectedId.value = null; return }
+  openNode(n.id, 'details')
 }
+
+const detailTabs = computed(() => {
+  const impactN = selectedNode.value ? selImpact.value.length : 0
+  return [
+    { key: 'details' as const, label: 'Details' },
+    { key: 'impact' as const, label: 'Impact', count: impactN },
+    { key: 'path' as const, label: 'Path' },
+  ]
+})
 
 const nodeFacts = (n: FNode): { label: string; value: string }[] => {
   if (n.kind === 'network') {
@@ -483,28 +512,167 @@ const nodeFacts = (n: FNode): { label: string; value: string }[] => {
   }
   if (n.kind === 'target') {
     const conns = props.services.filter(s => s.target.name === n.name).map(s => props.connections.find(c => c.id === s.connectionId)?.name).filter(Boolean)
-    if (conns.length) facts.push({ label: 'Reached via', value: [...new Set(conns)].join(', ') })
+    if (conns.length) facts.push({ label: 'Reached via', value: uniq(conns as string[]).join(', ') })
   }
   return facts
 }
 
-const nodeAction = (n: FNode): string | null => {
-  if (n.tone === 'ready') return null
-  if (n.kind === 'connectivity') {
-    const c = props.connections.find(x => `conn-${x.id}` === n.id)
-    return c ? nextActionText(c) : null
+// ── Service paths (a node's end-to-end route) ─────────────────────────────────
+const serviceObjForNode = (n: FNode): ServicePath | null => {
+  if (n.kind === 'target') return props.services.find(s => s.target.name === n.name) ?? null
+  if (n.kind === 'connectivity') return props.services.find(s => s.connectionId === n.id.slice(5)) ?? null
+  if (n.kind === 'dns') return props.services.find(s => s.dnsConfigId === n.id.slice(4)) ?? null
+  if (n.kind === 'gateway') return props.services.find(s => s.gatewayName === n.name) ?? props.services[0] ?? null
+  return null
+}
+
+interface TraceHop { key: string; kicker: string; title: string; sub: string; tone: Tone; status: string }
+const buildHops = (s: ServicePath): TraceHop[] => {
+  const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
+  const conn = props.connections.find(c => c.id === s.connectionId)
+  return [
+    { key: 'service', kicker: 'Gateway service', title: s.name, sub: s.gatewayName, tone: 'ready', status: 'Sending' },
+    { key: 'network', kicker: 'Network', title: props.network.name, sub: `${props.network.cloud.toUpperCase()} · ${props.network.regions[0].region}`, tone: props.network.status === 'ready' ? 'ready' : 'pending', status: netStatusLabel.value },
+    { key: 'dns', kicker: 'Private DNS', title: s.upstream, sub: dns ? dnsTypeLabel(dns.type) : 'Not configured', tone: dns ? dnsTone(dns.status) : 'error', status: dns ? dnsStatusLabel(dns.status) : 'Missing' },
+    { key: 'conn', kicker: 'Connectivity', title: conn ? conn.name : 'Not configured', sub: conn ? connectionTypeLabel(conn.type) : '—', tone: conn ? connTone(conn.status) : 'error', status: conn ? connStatusLabel(conn.status) : 'Missing' },
+    { key: 'target', kicker: 'Private target', title: s.target.name, sub: s.target.address, tone: targetToneOf(s.target.status), status: targetStatusLabel(s.target.status) },
+  ]
+}
+const servicePathTone = (s: ServicePath): Tone => worstTone(buildHops(s).map(h => h.tone))
+
+// First unhealthy underlying resource on a node's path — where the fix lives.
+const firstBrokenUnderlying = (n: FNode): { kind: 'dns' | 'conn'; id: string } | null => {
+  const s = serviceObjForNode(n)
+  if (!s) return null
+  const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
+  if (dns && dnsTone(dns.status) !== 'ready') return { kind: 'dns', id: dns.id }
+  const conn = props.connections.find(c => c.id === s.connectionId)
+  if (conn && connTone(conn.status) !== 'ready') return { kind: 'conn', id: conn.id }
+  return null
+}
+
+// ── Detail: Path tab ──────────────────────────────────────────────────────────
+const selService = computed(() => selectedNode.value ? serviceObjForNode(selectedNode.value) : null)
+const selHops = computed<TraceHop[]>(() => selService.value ? buildHops(selService.value) : [])
+const selFirstBroken = computed(() => selHops.value.findIndex(h => h.tone !== 'ready'))
+const selPathTone = computed<Tone>(() => worstTone(selHops.value.map(h => h.tone)))
+const transitionLabel = (hop: TraceHop) => hop.tone === 'ready' ? 'Reachable' : hop.status
+const selPathSummary = computed(() => {
+  const s = selService.value
+  if (!s) return ''
+  const b = selHops.value.find(h => h.tone !== 'ready')
+  if (!b) return `Traffic from ${s.name} reaches ${s.target.name}. The path is healthy.`
+  return `Traffic from ${s.name} is blocked at ${b.kicker.toLowerCase()} — ${b.title} is ${b.status.toLowerCase()}.`
+})
+
+// ── Detail: Impact tab (blast radius) ─────────────────────────────────────────
+interface ImpactRow { name: string; meta: string; tone: Tone; statusLabel: string }
+const impactHeading = computed(() => {
+  const n = selectedNode.value
+  if (!n) return ''
+  if (n.kind === 'target') return 'Depended on by'
+  if (n.kind === 'gateway' || n.kind === 'network') return n.tone === 'ready' ? 'Reaches' : 'Affected resources'
+  return n.tone === 'ready' ? 'Reaches' : 'Affected downstream'
+})
+const selImpact = computed<ImpactRow[]>(() => {
+  const n = selectedNode.value
+  if (!n) return []
+  const targetRow = (name: string): ImpactRow => {
+    const svc = props.services.find(s => s.target.name === name)
+    const tone = svc ? targetToneOf(svc.target.status) : 'pending'
+    return { name, meta: 'Private target', tone, statusLabel: svc ? targetStatusLabel(svc.target.status) : 'Pending' }
   }
-  if (n.kind === 'dns') {
-    return n.tone === 'error'
-      ? 'The resolver is unreachable. Check the outbound resolver configuration and the target it points to.'
-      : 'Resolution is still propagating. No action needed unless it stays pending.'
+  if (n.kind === 'connectivity' || n.kind === 'dns') return downstreamTargets(n).map(targetRow)
+  if (n.kind === 'gateway') {
+    const names = uniq(props.services.filter(s => s.gatewayName === n.name).map(s => s.target.name))
+    return names.map(targetRow)
   }
   if (n.kind === 'target') {
+    return props.services.filter(s => s.target.name === n.name).map(s => ({
+      name: s.name, meta: `Service · ${s.gatewayName}`, tone: servicePathTone(s), statusLabel: servicePathTone(s) === 'ready' ? 'Healthy' : servicePathTone(s) === 'error' ? 'Blocked' : 'Degraded',
+    }))
+  }
+  if (n.kind === 'network') {
+    return flowResourceNodes.value
+      .filter(r => r.tone !== 'ready')
+      .map(r => ({ name: r.name, meta: kindLabel(r.kind), tone: r.tone, statusLabel: r.statusLabel }))
+  }
+  return []
+})
+
+// ── Detail: probable cause + actionable recommendation ────────────────────────
+const selCause = computed<string | null>(() => {
+  const n = selectedNode.value
+  if (!n || n.tone === 'ready') return null
+  if (n.kind === 'dns') {
     return n.tone === 'error'
-      ? 'This target is unreachable. Check the connection that reaches it and the target’s own health.'
-      : 'The path to this target is still coming up. No action needed unless it stays pending.'
+      ? `Queries reach the network, but ${n.name} hasn’t responded — the resolver endpoint looks unreachable.`
+      : `Resolution for ${n.name} is still propagating.`
+  }
+  if (n.kind === 'connectivity') {
+    return n.tone === 'error'
+      ? `${n.name} is in an error state and isn’t carrying traffic.`
+      : `${n.name} is waiting on an action in your cloud account before it can carry traffic.`
+  }
+  if (n.kind === 'target') {
+    const b = selHops.value.find(h => h.tone !== 'ready')
+    return b
+      ? `${n.name} can’t be reached — traffic is blocked at ${b.kicker.toLowerCase()}: ${b.title} is ${b.status.toLowerCase()}.`
+      : `${n.name} is not reachable yet.`
   }
   return null
+})
+
+interface Cta { label: string; kind: 'route-conn' | 'route-dns' | 'tab-path'; id?: string }
+interface Reco { title: string; detail: string; cta?: Cta }
+const selReco = computed<Reco | null>(() => {
+  const n = selectedNode.value
+  if (!n || n.tone === 'ready') return null
+  if (n.kind === 'connectivity') {
+    const connId = n.id.slice(5)
+    const c = props.connections.find(x => x.id === connId)
+    return {
+      title: n.tone === 'error' ? 'Resolve the connection error' : 'Finish setting up this connection',
+      detail: c ? nextActionText(c) : 'Review this connection’s configuration.',
+      cta: { label: 'Open connection', kind: 'route-conn', id: connId },
+    }
+  }
+  if (n.kind === 'dns') {
+    const dnsId = n.id.slice(4)
+    if (n.tone === 'error') {
+      return {
+        title: 'Restore DNS resolution',
+        detail: 'Check the outbound resolver configuration and the target it points to, then re-check the status.',
+        cta: { label: 'Open DNS configuration', kind: 'route-dns', id: dnsId },
+      }
+    }
+    return { title: 'Wait for resolution', detail: 'Resolution is still propagating. No action is needed unless it stays pending.' }
+  }
+  if (n.kind === 'target') {
+    const b = firstBrokenUnderlying(n)
+    if (b?.kind === 'dns') {
+      return {
+        title: 'Fix the upstream resolver',
+        detail: `${n.name} depends on a DNS record that isn’t resolving. Restore it, then re-check this target.`,
+        cta: { label: 'Open DNS configuration', kind: 'route-dns', id: b.id },
+      }
+    }
+    if (b?.kind === 'conn') {
+      return {
+        title: 'Fix the upstream connection',
+        detail: `${n.name} depends on a connection that isn’t healthy. Resolve it, then re-check this target.`,
+        cta: { label: 'Open connection', kind: 'route-conn', id: b.id },
+      }
+    }
+    return { title: 'Wait for the path to come up', detail: 'No action is needed unless it stays pending.', cta: { label: 'View the path', kind: 'tab-path' } }
+  }
+  return null
+})
+
+const runCta = (cta: Cta) => {
+  if (cta.kind === 'route-conn') router.push({ name: 'networks-connection-detail', params: { id: networkId.value, connId: cta.id } })
+  else if (cta.kind === 'route-dns') router.push({ name: 'networks-dns-detail', params: { id: networkId.value, dnsId: cta.id } })
+  else if (cta.kind === 'tab-path') detailTab.value = 'path'
 }
 
 // ── Pan + zoom ─────────────────────────────────────────────────────────────
@@ -571,108 +739,17 @@ const fit = () => {
 }
 
 onMounted(() => nextTick(fit))
-watch(() => [layout.value.width, layout.value.height, mode.value], () => nextTick(fit))
-
-// ── Path trace (separate mode) ────────────────────────────────────────────────
-const tracedId = ref<string | null>(null)
-const tracedService = computed(() => props.services.find(s => s.id === tracedId.value) || null)
-const enterTrace = (serviceId?: string) => { mode.value = 'trace'; tracedId.value = serviceId ?? props.services[0]?.id ?? null }
-const exitTrace = () => { mode.value = 'map'; tracedId.value = null }
-
-const servicePathTone = (s: ServicePath): Tone => {
-  const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
-  const conn = props.connections.find(c => c.id === s.connectionId)
-  return worstTone([
-    dns ? dnsTone(dns.status) : 'error',
-    conn ? connTone(conn.status) : 'error',
-    targetToneOf(s.target.status),
-  ])
-}
-
-// Worst-health service path — what KAi's "Trace the broken path" jumps to.
-const worstServiceId = computed(() => {
-  const svcs = [...props.services].sort((a, b) => rank(servicePathTone(b)) - rank(servicePathTone(a)))
-  return svcs[0]?.id ?? null
-})
-
-// Contextual trace: from a selected node, find the service path it sits on.
-const serviceForNode = (n: FNode): string | null => {
-  if (n.kind === 'target') return props.services.find(s => s.target.name === n.name)?.id ?? null
-  if (n.kind === 'connectivity') return props.services.find(s => s.connectionId === n.id.slice(5))?.id ?? null
-  if (n.kind === 'dns') return props.services.find(s => s.dnsConfigId === n.id.slice(4))?.id ?? null
-  if (n.kind === 'gateway') return props.services.find(s => s.gatewayName === n.name)?.id ?? props.services[0]?.id ?? null
-  return null
-}
-const traceFromNode = (n: FNode) => {
-  const id = serviceForNode(n)
-  if (id) { selectedId.value = null; enterTrace(id) }
-}
-
-interface TraceHop { key: string; kicker: string; title: string; sub: string; tone: Tone; status: string }
-const traceHops = computed<TraceHop[]>(() => {
-  const s = tracedService.value
-  if (!s) return []
-  const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
-  const conn = props.connections.find(c => c.id === s.connectionId)
-  return [
-    { key: 'service', kicker: 'Gateway service', title: s.name, sub: s.gatewayName, tone: 'ready', status: 'Sending' },
-    { key: 'network', kicker: 'Network', title: props.network.name, sub: `${props.network.cloud.toUpperCase()} · ${props.network.regions[0].region}`, tone: props.network.status === 'ready' ? 'ready' : 'pending', status: netStatusLabel.value },
-    { key: 'dns', kicker: 'Private DNS', title: s.upstream, sub: dns ? dnsTypeLabel(dns.type) : 'Not configured', tone: dns ? dnsTone(dns.status) : 'error', status: dns ? dnsStatusLabel(dns.status) : 'Missing' },
-    { key: 'conn', kicker: 'Connectivity', title: conn ? conn.name : 'Not configured', sub: conn ? connectionTypeLabel(conn.type) : '—', tone: conn ? connTone(conn.status) : 'error', status: conn ? connStatusLabel(conn.status) : 'Missing' },
-    { key: 'target', kicker: 'Private target', title: s.target.name, sub: s.target.address, tone: targetToneOf(s.target.status), status: targetStatusLabel(s.target.status) },
-  ]
-})
-const brokenHop = computed(() => traceHops.value.find(h => h.tone !== 'ready') || null)
-const traceSummary = computed(() => {
-  const s = tracedService.value
-  if (!s) return ''
-  const b = brokenHop.value
-  if (!b) return `Traffic from ${s.name} reaches ${s.target.name}. The path is healthy.`
-  return `Traffic from ${s.name} is blocked at ${b.kicker.toLowerCase()} — ${b.title} is ${b.status.toLowerCase()}.`
-})
-const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
+watch(() => [layout.value.width, layout.value.height], () => nextTick(fit))
 </script>
 
 <style scoped lang="scss">
 .ncm {
   display: flex;
   flex-direction: column;
-  gap: $kui-space-60;
-}
-
-.ncm-toolbar {
-  align-items: center;
-  display: flex;
-  gap: $kui-space-50;
-  justify-content: space-between;
-}
-
-.ncm-toolbar-actions {
-  display: flex;
-  gap: $kui-space-40;
-}
-
-.ncm-caption {
-  color: $kui-color-text;
-  font-size: $kui-font-size-30;
-  margin: $kui-space-0;
-
-  .ncm-caption-dim { color: $kui-color-text-neutral; margin-left: $kui-space-30; }
-}
-
-.ncm-kai { margin-bottom: -$kui-space-30; }
-.ncm-hint {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-20;
-  margin: $kui-space-0;
-}
-.ncm-trace-head {
-  align-items: center;
-  display: flex;
   gap: $kui-space-50;
 }
-.ncm-trace-headtext { color: $kui-color-text-neutral; font-size: $kui-font-size-30; }
-.ncm-detail-cta { display: flex; }
+
+.ncm-kai { flex: 0 0 auto; }
 
 // ── Pannable topology canvas ────────────────────────────────────────────────
 .flowcanvas {
@@ -682,7 +759,7 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
   cursor: grab;
-  height: 560px;
+  height: 520px;
   overflow: hidden;
   position: relative;
   touch-action: none;
@@ -698,6 +775,15 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   position: absolute;
   top: $kui-space-50;
   z-index: 2;
+}
+
+.flow-hint {
+  bottom: $kui-space-50;
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  left: $kui-space-50;
+  position: absolute;
+  z-index: 1;
 }
 
 .flow-stage {
@@ -806,6 +892,7 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 .fnode-dot {
   border-radius: $kui-border-radius-circle;
   display: block;
+  flex: 0 0 auto;
   height: 10px;
   width: 10px;
 
@@ -847,6 +934,73 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+// Tabs
+.dtabs {
+  border-bottom: $kui-border-width-10 solid $kui-color-border;
+  display: flex;
+  gap: $kui-space-60;
+}
+.dtab {
+  background: none;
+  border: none;
+  border-bottom: $kui-border-width-20 solid transparent;
+  color: $kui-color-text-neutral;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: $kui-font-size-30;
+  gap: $kui-space-30;
+  margin-bottom: -$kui-border-width-10;
+  padding: $kui-space-40 $kui-space-0;
+
+  &:hover { color: $kui-color-text; }
+  &--active { border-bottom-color: $kui-color-border-primary; color: $kui-color-text-primary; font-weight: $kui-font-weight-semibold; }
+}
+.dtab-count {
+  align-items: center;
+  background-color: $kui-color-background-neutral-weak;
+  border-radius: $kui-border-radius-round;
+  color: $kui-color-text-neutral;
+  display: inline-flex;
+  font-size: $kui-font-size-10;
+  font-weight: $kui-font-weight-semibold;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 $kui-space-20;
+}
+
+.dtab-body { display: flex; flex-direction: column; gap: $kui-space-60; }
+.dsec { display: flex; flex-direction: column; gap: $kui-space-30; }
+.dsec-label {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-10;
+  font-weight: $kui-font-weight-semibold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dcause {
+  color: $kui-color-text;
+  font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
+  margin: $kui-space-0;
+}
+
+.dreco {
+  border-radius: $kui-border-radius-40;
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-30;
+  padding: $kui-space-60;
+
+  &--pending { background-color: $kui-color-background-warning-weakest; }
+  &--error { background-color: $kui-color-background-danger-weakest; }
+}
+.dreco-title { color: $kui-color-text; font-size: $kui-font-size-40; font-weight: $kui-font-weight-semibold; margin: $kui-space-0; }
+.dreco-detail { color: $kui-color-text-neutral; font-size: $kui-font-size-30; line-height: $kui-line-height-40; margin: $kui-space-0; }
+.dreco :deep(.k-button) { align-self: flex-start; margin-top: $kui-space-20; }
+
 .ncm-detail-facts {
   display: grid;
   gap: $kui-space-40 $kui-space-50;
@@ -856,128 +1010,82 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   dt { color: $kui-color-text-neutral; font-size: $kui-font-size-30; }
   dd { color: $kui-color-text; font-size: $kui-font-size-30; margin: $kui-space-0; overflow-wrap: anywhere; text-align: right; }
 }
-.ncm-detail-action {
-  border-radius: $kui-border-radius-30;
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-20;
-  padding: $kui-space-50;
 
-  &--pending { background-color: $kui-color-background-warning-weakest; }
-  &--error { background-color: $kui-color-background-danger-weakest; }
-
-  .ncm-detail-action-label {
-    color: $kui-color-text-neutral;
-    font-size: $kui-font-size-10;
-    font-weight: $kui-font-weight-semibold;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .ncm-detail-action-text {
-    color: $kui-color-text;
-    font-size: $kui-font-size-30;
-    line-height: $kui-line-height-40;
-    margin: $kui-space-0;
-  }
-}
-
-// ── Trace mode ──────────────────────────────────────────────────────────────
-.ncm-trace-picker {
+// Impact
+.dimpact { display: flex; flex-direction: column; list-style: none; margin: $kui-space-0; padding: $kui-space-0; }
+.dimpact-row {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: $kui-space-40 $kui-space-50;
-}
-.ncm-trace-label {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-30;
-  font-weight: $kui-font-weight-semibold;
-}
-.ncm-trace-chips { display: flex; flex-wrap: wrap; gap: $kui-space-40; }
-.ncm-trace-chip {
-  align-items: center;
-  background-color: $kui-color-background;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-round;
-  color: $kui-color-text;
-  cursor: pointer;
-  display: flex;
-  font-size: $kui-font-size-30;
-  gap: $kui-space-30;
-  padding: $kui-space-30 $kui-space-50;
-  transition: border-color 0.12s ease-in;
-
-  &:hover { border-color: $kui-color-border-primary; }
-  &--active {
-    background-color: $kui-color-background-primary-weakest;
-    border-color: $kui-color-border-primary;
-    color: $kui-color-text-primary;
-    font-weight: $kui-font-weight-semibold;
-  }
-}
-
-.ncm-trace { display: flex; flex-direction: column; gap: $kui-space-60; }
-.ncm-trace-chain {
-  align-items: stretch;
+  border-top: $kui-border-width-10 solid $kui-color-border;
   display: flex;
   gap: $kui-space-40;
-  overflow-x: auto;
-  padding-bottom: $kui-space-40;
+  padding: $kui-space-50 $kui-space-0;
+
+  &:first-child { border-top: none; }
 }
-.ncm-hop {
+.dimpact-text { display: flex; flex-direction: column; gap: $kui-space-10; margin-right: auto; min-width: 0; }
+.dimpact-name { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; overflow-wrap: anywhere; }
+.dimpact-meta { color: $kui-color-text-neutral; font-size: $kui-font-size-20; }
+
+// Path
+.dpath { display: flex; flex-direction: column; }
+.dhop {
+  align-items: center;
   background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
   display: flex;
-  flex: 1 0 180px;
-  flex-direction: column;
-  gap: $kui-space-20;
-  padding: $kui-space-50;
+  gap: $kui-space-40;
+  padding: $kui-space-40 $kui-space-50;
 
-  &--pending { border-left: $kui-border-width-30 solid $kui-color-background-warning; }
-  &--error { border-left: $kui-border-width-30 solid $kui-color-background-danger; }
-  &--broken { box-shadow: $kui-shadow-focus; }
+  &--broken { background-color: $kui-color-background-danger-weakest; border-color: $kui-color-border-danger; }
 }
-.ncm-node-kicker {
+.dhop-ic {
+  align-items: center;
+  border-radius: $kui-border-radius-circle;
+  display: flex;
+  flex: 0 0 auto;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+
+  &--ready { background-color: $kui-color-background-success-weakest; color: $kui-color-text-success; }
+  &--pending { background-color: $kui-color-background-warning-weakest; color: $kui-color-text-warning; }
+  &--error { background-color: $kui-color-background-danger-weakest; color: $kui-color-text-danger; }
+}
+.dhop-text { display: flex; flex-direction: column; gap: $kui-space-10; min-width: 0; }
+.dhop-kicker {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-10;
   font-weight: $kui-font-weight-semibold;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.ncm-hop-title { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; overflow-wrap: anywhere; }
-.ncm-node-sub { color: $kui-color-text-neutral; font-size: $kui-font-size-20; }
-.ncm-node-status {
-  font-size: $kui-font-size-20;
-  font-weight: $kui-font-weight-semibold;
+.dhop-title { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; overflow-wrap: anywhere; }
 
-  &--pending { color: $kui-color-text-warning; }
-  &--error { color: $kui-color-text-danger; }
-  &--ready { color: $kui-color-text-success; }
-}
-.ncm-hop-arrow {
-  align-self: center;
+// Connector between hops — vertical rail aligned under the hop icon, colour by health.
+.dhop-link {
   color: $kui-color-text-neutral;
-  flex: 0 0 auto;
-  font-size: $kui-font-size-50;
+  font-size: $kui-font-size-20;
+  margin-left: calc(#{$kui-space-50} + 12px - #{$kui-border-width-20} / 2);
+  padding: $kui-space-30 $kui-space-0 $kui-space-30 $kui-space-60;
 
-  &--pending { color: $kui-color-text-warning; }
-  &--error { color: $kui-color-text-danger; }
-  &--ready { color: $kui-color-text-success; }
+  border-left: $kui-border-width-20 solid $kui-color-border;
+  &--pending { border-left-color: $kui-color-text-warning; color: $kui-color-text-warning; }
+  &--error { border-left-color: $kui-color-text-danger; color: $kui-color-text-danger; }
 }
-.ncm-trace-summary {
+
+.dpath-summary {
   border-radius: $kui-border-radius-30;
   color: $kui-color-text;
   font-size: $kui-font-size-30;
+  line-height: $kui-line-height-40;
+  margin-top: $kui-space-50;
   padding: $kui-space-50 $kui-space-60;
 
   &--ready { background-color: $kui-color-background-success-weakest; }
   &--pending { background-color: $kui-color-background-warning-weakest; }
   &--error { background-color: $kui-color-background-danger-weakest; }
 }
-.ncm-trace-empty {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-30;
-  margin: $kui-space-0;
-}
+
+.dempty { color: $kui-color-text-neutral; font-size: $kui-font-size-30; margin: $kui-space-0; }
 </style>
