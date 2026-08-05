@@ -31,15 +31,17 @@
       </KButton>
     </template>
 
-    <!-- KAi page status — severity reflects this DNS record's state -->
-    <KaiStatusBar
-      :severity="kaiSeverity"
-      :one-liner="kaiOneLiner"
+    <!-- KAi summary card — what KAi found about this private DNS -->
+    <KaiSummaryCard
+      v-if="kaiOpen"
+      title="What KAi found"
       :insights="kaiInsights"
+      :one-liner="kaiOneLiner"
       :actions="kaiActions"
-      :start-expanded="dns.status !== 'ready'"
+      :initial-collapsed="dns.status === 'ready'"
       data-testid="dns-kai-card"
       @action="onKaiAction"
+      @close="kaiOpen = false"
     />
 
     <KCard title="About this private DNS">
@@ -99,8 +101,8 @@ import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
-import KaiStatusBar from '@/components/KaiStatusBar.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiStatusBar.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import { connectionTypeLabel, timeAgo } from '@/utils/connectionDisplay'
 import type { DnsType, DnsStatus } from '@/types'
@@ -129,13 +131,8 @@ const eventColumns: DetailColumn[] = [
   { key: 'result', label: 'Result' },
 ]
 
-// ── KAi page status (severity reflects this DNS record's state) ───────────────
-const kaiSeverity = computed<'critical' | 'warning' | 'healthy'>(() => {
-  const s = dns.value?.status
-  if (s === 'error') return 'critical'
-  if (s === 'ready') return 'healthy'
-  return 'warning'
-})
+// ── KAi summary (what KAi found about this private DNS) ───────────────────────
+const kaiOpen = ref(true)
 const kaiOneLiner = computed(() => {
   const d = dns.value
   if (!d) return ''

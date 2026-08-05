@@ -17,6 +17,7 @@
         <SparklesIcon class="kai-spark" :size="KUI_ICON_SIZE_30" decorative />
         <span class="kai-title">{{ title }}</span>
         <span class="kai-time">{{ timeLabel }}</span>
+        <span class="kai-head-divider" />
         <button
           type="button"
           class="kai-icon-btn"
@@ -190,6 +191,14 @@ const copy = () => {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-20;
   margin-left: auto;
+}
+
+.kai-head-divider {
+  align-self: stretch;
+  background-color: $kui-color-border;
+  flex: 0 0 auto;
+  margin: $kui-space-0 $kui-space-20;
+  width: $kui-border-width-10;
 }
 
 .kai-icon-btn {

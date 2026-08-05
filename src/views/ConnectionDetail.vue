@@ -51,15 +51,17 @@
     </template>
 
     <div class="detail-stack">
-    <!-- KAi page status — severity reflects the connection's state -->
-    <KaiStatusBar
-      :severity="kaiSeverity"
-      :one-liner="kaiOneLiner"
+    <!-- KAi summary card — what KAi found about this connection -->
+    <KaiSummaryCard
+      v-if="kaiOpen"
+      title="What KAi found"
       :insights="kaiInsights"
+      :one-liner="kaiOneLiner"
       :actions="kaiActions"
-      :start-expanded="connection.status !== 'ready'"
+      :initial-collapsed="connection.status === 'ready'"
       data-testid="conn-kai-card"
       @action="onKaiAction"
+      @close="kaiOpen = false"
     />
 
     <!-- About this connection -->
@@ -165,8 +167,8 @@ import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
 import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
-import KaiStatusBar from '@/components/KaiStatusBar.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiStatusBar.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import {
   connectionTypeLabel,
@@ -290,13 +292,8 @@ const eventColumns: DetailColumn[] = [
   { key: 'result', label: 'Result' },
 ]
 
-// ── KAi page status (severity reflects the connection's state) ────────────────
-const kaiSeverity = computed<'critical' | 'warning' | 'healthy'>(() => {
-  const s = connection.value?.status
-  if (s === 'error') return 'critical'
-  if (s === 'ready') return 'healthy'
-  return 'warning'
-})
+// ── KAi summary (what KAi found about this connection) ────────────────────────
+const kaiOpen = ref(true)
 const kaiOneLiner = computed(() => {
   const c = connection.value
   if (!c) return ''

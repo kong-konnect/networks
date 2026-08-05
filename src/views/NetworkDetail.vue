@@ -72,11 +72,12 @@
     <!-- Non-ready provisioning states -->
     <template v-if="network.status !== 'ready'">
       <div v-if="network.status === 'initialising'" class="provisioning-view">
-        <!-- Informational banner — initializing is system-driven; no action needed -->
+        <!-- Informational banner — the network provisions on Kong's side; no action needed.
+             (Step-by-step provisioning progress is a private-connectivity concept, not the network's.) -->
         <KAlert appearance="info" data-testid="provisioning-banner">
           <template #title>Kong is setting up this network</template>
           <template #default>
-            No action is needed. Private connectivity and Private DNS become available once the network is ready.
+            This can take 45 minutes or more and needs no action from you. Private connectivity and Private DNS become available once the network is ready. Last checked {{ timeAgo(network.lastCheckedAt) }}.
           </template>
         </KAlert>
 
@@ -151,44 +152,6 @@
           </div>
         </section>
 
-        <!-- Provisioning progress — dependency-check style: one container, a checklist of steps -->
-        <section class="detail-card" data-testid="provisioning-progress">
-          <div class="section-header-text">
-            <h3 class="numbered-title">Provisioning progress</h3>
-            <p class="section-help">Network setup can take 45+ minutes. Kong checks status periodically — last checked {{ timeAgo(network.lastCheckedAt) }}.</p>
-          </div>
-          <ul class="prov-checklist">
-            <li
-              v-for="s in provisioningSteps"
-              :key="s.key"
-              class="prov-check-row"
-              :class="[`prov-check-row--${s.state}`, { 'prov-check-row--awaiting': s.state === 'current' && s.owner === 'user' }]"
-            >
-              <span class="prov-check-icon">
-                <CheckCircleIcon v-if="s.state === 'done'" :size="KUI_ICON_SIZE_30" decorative />
-                <NotificationOutlineIcon v-else-if="s.state === 'current' && s.owner === 'user'" :size="KUI_ICON_SIZE_30" decorative />
-                <ProgressIcon v-else-if="s.state === 'current'" class="prov-spin" :size="KUI_ICON_SIZE_30" decorative />
-                <ClockIcon v-else :size="KUI_ICON_SIZE_30" decorative />
-              </span>
-              <span class="prov-check-text">
-                <span class="prov-check-titles">
-                  <span class="prov-check-title">{{ s.title }}</span>
-                  <KBadge :appearance="s.owner === 'user' ? 'warning' : 'neutral'">{{ s.owner === 'user' ? 'You' : 'Kong' }}</KBadge>
-                </span>
-                <span class="prov-check-desc">{{ s.desc }}</span>
-              </span>
-              <span class="prov-check-status">{{ provStatusLabel(s) }}</span>
-            </li>
-          </ul>
-        </section>
-
-        <!-- KAi reassurance while provisioning -->
-        <KaiStatusBar
-          severity="info"
-          one-liner="No action needed — provisioning takes about 45 minutes. KAi will flag it here if setup needs you."
-          data-testid="kai-initializing"
-        />
-
         <!-- Prototype device: skip the 45-min provisioning wait. Intentionally low-prominence. -->
         <div class="sim-ready">
           <button type="button" class="sim-ready-btn" data-testid="simulate-ready" @click="simulateReady">
@@ -214,14 +177,14 @@
       <!-- ── Overview tab ─────────────────────────────────────── -->
       <div v-if="activeTab === '#overview'" class="tab-content">
 
-        <!-- KAi page status — lives on the network's Overview (its home), not across every tab -->
-        <KaiStatusBar
+        <!-- KAi summary card — on the network's Overview (its home), not across every tab -->
+        <KaiSummaryCard
           class="nd-kai"
-          :severity="kaiSeverity"
-          :count-label="kaiCountLabel"
-          :one-liner="kaiOneLiner"
+          title="Network health summary"
           :insights="kaiInsights"
+          :one-liner="kaiOneLiner"
           :actions="kaiActions"
+          initial-collapsed
           data-testid="kai-network-summary"
           @action="onKaiAction"
         />
@@ -669,8 +632,8 @@ import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
-import KaiStatusBar from '@/components/KaiStatusBar.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiStatusBar.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
@@ -725,15 +688,6 @@ const kaiCount = computed(() => {
   const p = kaiProblems.value
   return p.dnsErr.length + p.dnsPending.length + p.connBad.length
 })
-const kaiSeverity = computed<'critical' | 'warning' | 'healthy'>(() => {
-  const p = kaiProblems.value
-  if (p.dnsErr.length || p.connErr.length) return 'critical'
-  if (kaiCount.value > 0) return 'warning'
-  return 'healthy'
-})
-const kaiCountLabel = computed(() =>
-  kaiCount.value === 0 ? '' : `${kaiCount.value} ${kaiCount.value === 1 ? 'issue' : 'issues'}:`)
-
 const kaiInsights = computed<KaiInsight[]>(() => {
   const p = kaiProblems.value
   if (kaiCount.value === 0) {
