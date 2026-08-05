@@ -29,14 +29,16 @@
         @close="kaiCfg.close()"
       />
 
-      <section class="form-card" data-testid="network-create-form">
-        <!-- Network details -->
-        <div class="form-section">
-          <div class="section-heading">
-            <h2 class="section-title">Network details</h2>
-            <p class="section-help">A network is single-cloud and single-region. Add private connectivity and DNS after it's ready.</p>
-          </div>
-
+      <EntityBaseForm
+        entity-type="network"
+        :can-submit="canCreate && !isSubmitting"
+        @submit="handleCreate"
+        @cancel="router.push({ name: 'networks-list' })"
+      >
+        <EntityFormSection
+          title="Network details"
+          description="A network is single-cloud and single-region. You add private connectivity and DNS after it's ready."
+        >
           <div class="form-group">
             <KLabel :required="true">Network name</KLabel>
             <KInput
@@ -49,17 +51,13 @@
               @update:model-value="validateName"
             />
           </div>
-        </div>
+        </EntityFormSection>
 
-        <hr class="divider">
-
-        <!-- Location -->
-        <div class="form-section">
-          <div class="section-heading">
-            <h2 class="section-title">Provider and region</h2>
-            <p class="section-help">Choose where Kong provisions this network.</p>
-          </div>
-
+        <EntityFormSection
+          title="Provider and region"
+          description="Choose where Kong provisions this network. Both the provider and region are permanent once the network is created."
+          has-divider
+        >
           <div class="two-col">
             <div class="form-group">
               <KLabel :required="true">Provider</KLabel>
@@ -99,17 +97,17 @@
               </KSelect>
             </div>
           </div>
-        </div>
+        </EntityFormSection>
 
-        <hr class="divider">
-
-        <!-- Network range -->
-        <div class="form-section">
-          <div class="section-heading">
-            <h2 class="section-title">Network range</h2>
-            <p class="section-help">The CIDR block for this network's Dedicated Cloud Gateway.</p>
-          </div>
-
+        <EntityFormSection title="Network range" has-divider>
+          <template #description>
+            <p>The CIDR block for this network's Dedicated Cloud Gateway. It can't be changed after the network is created, so choose a range large enough for future growth.</p>
+            <ul class="section-guidance">
+              <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
+              <li><strong>Private range:</strong> must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
+              <li>Don't overlap ranges your organization already uses — overlaps break VPC peering. Reserved: 10.100.0.0/16, 172.17.0.0/16.</li>
+            </ul>
+          </template>
           <div class="form-group">
             <KLabel :required="true">CIDR range</KLabel>
             <KInput
@@ -121,7 +119,6 @@
               :error-message="cidrError"
               @update:model-value="validateCidr"
             />
-            <p class="field-help" data-testid="cidr-permanent">This range can't be changed after the network is created, so choose one large enough for future growth.</p>
             <p
               v-if="cidrWarning"
               class="cidr-hint-warning"
@@ -129,29 +126,14 @@
             >
               {{ cidrWarning }}
             </p>
-            <button type="button" class="cidr-help-toggle" @click="showCidrHelp = !showCidrHelp">
-              <component :is="showCidrHelp ? ChevronUpIcon : ChevronDownIcon" :size="KUI_ICON_SIZE_20" decorative />
-              {{ showCidrHelp ? 'Hide CIDR requirements' : 'Show CIDR requirements' }}
-            </button>
-            <div v-if="showCidrHelp" class="cidr-help">
-              <ul>
-                <li><strong>Prefix length</strong> between /16 and /23. /23 supports up to 3 availability zones.</li>
-                <li><strong>Private IP range:</strong> the block must fall within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15.</li>
-                <li>Don't overlap ranges already used by your organization — overlaps break VPC peering. Reserved: 10.100.0.0/16, 172.17.0.0/16.</li>
-              </ul>
-            </div>
           </div>
-        </div>
+        </EntityFormSection>
 
-        <hr class="divider">
-
-        <!-- Zone placements -->
-        <div class="form-section">
-          <div class="section-heading">
-            <h2 class="section-title">Zone placements</h2>
-            <p class="section-help">Your network is deployed across these availability zones. Select at least 2 for resilience.</p>
-          </div>
-
+        <EntityFormSection
+          title="Zone placements"
+          description="Your network is deployed across these availability zones. Select at least 2 for resilience."
+          has-divider
+        >
           <div class="form-group">
             <div
               v-if="form.region"
@@ -177,130 +159,61 @@
               Select at least 2 zones.
             </p>
           </div>
-        </div>
-      </section>
+        </EntityFormSection>
 
-      <!-- Private connectivity (optional) — separate container -->
-      <section class="form-card optional-card" data-testid="connectivity-card">
-        <div class="form-section">
-          <button
-            type="button"
-            class="section-toggle"
-            :aria-expanded="showConnectivity"
-            data-testid="connectivity-toggle"
-            @click="showConnectivity = !showConnectivity"
-          >
-            <span class="section-heading">
-              <span class="section-title-row">
-                <h2 class="section-title">Private connectivity</h2>
-                <KBadge appearance="neutral">Optional</KBadge>
-              </span>
-              <p class="section-help">Connect this network so clients can reach Kong and Kong can reach your services. You can also add connections after the network is ready.</p>
-            </span>
-            <ChevronDownIcon
-              class="section-chevron"
-              :class="{ 'section-chevron--open': showConnectivity }"
-              :size="KUI_ICON_SIZE_30"
-              decorative
-            />
-          </button>
-
-          <div v-if="showConnectivity" class="form-collapse" data-testid="connectivity-fields">
-            <div class="two-col">
-              <div class="form-group">
-                <KLabel>Connection type</KLabel>
-                <KSelect
-                  v-model="form.connType"
-                  :items="connTypeOptions"
-                  placeholder="Select a type"
-                  width="100%"
-                />
-              </div>
-              <div class="form-group">
-                <KLabel>Name</KLabel>
-                <KInput
-                  v-model.trim="form.connName"
-                  placeholder="e.g., prod-vpc-peering"
-                  width="100%"
-                />
-              </div>
+        <EntityFormSection
+          title="Private connectivity"
+          description="Optional. Connect this network so clients can reach Kong and Kong can reach your services. You can also add connections after the network is ready."
+          has-divider
+        >
+          <div class="two-col">
+            <div class="form-group">
+              <KLabel>Connection type</KLabel>
+              <KSelect
+                v-model="form.connType"
+                :items="connTypeOptions"
+                placeholder="Select a type"
+                width="100%"
+              />
+            </div>
+            <div class="form-group">
+              <KLabel>Name</KLabel>
+              <KInput
+                v-model.trim="form.connName"
+                placeholder="e.g., prod-vpc-peering"
+                width="100%"
+              />
             </div>
           </div>
-        </div>
-      </section>
+        </EntityFormSection>
 
-      <!-- Private DNS (optional) — separate container -->
-      <section class="form-card optional-card" data-testid="dns-card">
-        <div class="form-section">
-          <button
-            type="button"
-            class="section-toggle"
-            :aria-expanded="showDns"
-            data-testid="dns-toggle"
-            @click="showDns = !showDns"
-          >
-            <span class="section-heading">
-              <span class="section-title-row">
-                <h2 class="section-title">Private DNS</h2>
-                <KBadge appearance="neutral">Optional</KBadge>
-              </span>
-              <p class="section-help">Resolve private service names reached through this network. You can also add private DNS after the network is ready.</p>
-            </span>
-            <ChevronDownIcon
-              class="section-chevron"
-              :class="{ 'section-chevron--open': showDns }"
-              :size="KUI_ICON_SIZE_30"
-              decorative
-            />
-          </button>
-
-          <div v-if="showDns" class="form-collapse" data-testid="dns-fields">
-            <div class="two-col">
-              <div class="form-group">
-                <KLabel>DNS type</KLabel>
-                <KSelect
-                  v-model="form.dnsType"
-                  :items="dnsTypeOptions"
-                  placeholder="Select a type"
-                  width="100%"
-                />
-              </div>
-              <div class="form-group">
-                <KLabel>Domain</KLabel>
-                <KInput
-                  v-model.trim="form.dnsDomain"
-                  placeholder="e.g., internal.company.com"
-                  width="100%"
-                />
-              </div>
+        <EntityFormSection
+          title="Private DNS"
+          description="Optional. Resolve private service names reached through this network. You can also add private DNS after the network is ready."
+          has-divider
+        >
+          <div class="two-col">
+            <div class="form-group">
+              <KLabel>DNS type</KLabel>
+              <KSelect
+                v-model="form.dnsType"
+                :items="dnsTypeOptions"
+                placeholder="Select a type"
+                width="100%"
+              />
+            </div>
+            <div class="form-group">
+              <KLabel>Domain</KLabel>
+              <KInput
+                v-model.trim="form.dnsDomain"
+                placeholder="e.g., internal.company.com"
+                width="100%"
+              />
             </div>
           </div>
-        </div>
-      </section>
+        </EntityFormSection>
 
-      <WizardFooter>
-        <KButton
-          appearance="primary"
-          :disabled="!canCreate || isSubmitting"
-          data-testid="network-create-button"
-          @click="handleCreate"
-        >
-          <ProgressIcon
-            v-if="isSubmitting"
-            class="btn-spinner"
-            :size="KUI_ICON_SIZE_20"
-            decorative
-          />
-          {{ isSubmitting ? 'Creating network…' : 'Create network' }}
-        </KButton>
-        <KButton
-          appearance="secondary"
-          data-testid="network-cancel"
-          @click="router.push({ name: 'networks-list' })"
-        >
-          Cancel
-        </KButton>
-        <template #aux>
+        <template #form-actions>
           <KButton
             appearance="tertiary"
             data-testid="network-view-config"
@@ -308,8 +221,29 @@
           >
             View configuration
           </KButton>
+          <KButton
+            appearance="tertiary"
+            data-testid="network-cancel"
+            @click="router.push({ name: 'networks-list' })"
+          >
+            Cancel
+          </KButton>
+          <KButton
+            appearance="primary"
+            :disabled="!canCreate || isSubmitting"
+            data-testid="network-create-button"
+            @click="handleCreate"
+          >
+            <ProgressIcon
+              v-if="isSubmitting"
+              class="btn-spinner"
+              :size="KUI_ICON_SIZE_20"
+              decorative
+            />
+            {{ isSubmitting ? 'Creating network…' : 'Create network' }}
+          </KButton>
         </template>
-      </WizardFooter>
+      </EntityBaseForm>
     </div>
 
     <!-- Config-as-code on demand — opened from the footer, not shown inline -->
@@ -327,10 +261,8 @@
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { ChevronDownIcon, ChevronUpIcon, ProgressIcon, SparklesIcon } from '@kong/icons'
+import { ProgressIcon, SparklesIcon } from '@kong/icons'
 import {
-  KAlert,
-  KBadge,
   KButton,
   KCheckbox,
   KInput,
@@ -340,7 +272,8 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
-import WizardFooter from '@/components/WizardFooter.vue'
+import EntityBaseForm from '@/components/EntityBaseForm.vue'
+import EntityFormSection from '@/components/EntityFormSection.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
@@ -368,9 +301,6 @@ const form = reactive({
   dnsDomain: '',
 })
 
-const showConnectivity = ref(false)
-const showDns = ref(false)
-const showCidrHelp = ref(false)
 
 const connTypeOptions = [
   { label: 'VPC peering', value: 'peering' },
@@ -547,13 +477,27 @@ const handleCreate = () => {
 <style scoped lang="scss">
 @use "@kong/design-tokens/tokens/scss/variables" as *;
 
-// Single column, centered — one balanced setup structure shared across create/add flows.
+// Konnect form language: EntityBaseForm + two-column EntityFormSection (info left, fields right).
 .network-create {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
   margin: $kui-space-0 auto;
-  max-width: 760px;
+  max-width: 1080px;
+}
+
+// Guidance list inside a form section's info column (e.g. CIDR requirements).
+.section-guidance {
+  color: $kui-color-text-neutral;
+  display: flex;
+  flex-direction: column;
+  font-size: $kui-font-size-30;
+  gap: $kui-space-30;
+  line-height: $kui-line-height-40;
+  margin: $kui-space-50 $kui-space-0 $kui-space-0;
+  padding-left: $kui-space-60;
+
+  strong { color: $kui-color-text; font-weight: $kui-font-weight-semibold; }
 }
 
 // "Show CIDR requirements" disclosure — the ONE place the CIDR rules live.

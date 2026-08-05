@@ -45,7 +45,14 @@
             Add connection
           </KDropdownItem>
           <KDropdownItem
+            data-testid="network-add-dns"
+            @click="openAddDns"
+          >
+            Add private DNS
+          </KDropdownItem>
+          <KDropdownItem
             data-testid="network-view-config"
+            has-divider
             @click="showConfigSlideout = true"
           >
             View configuration
@@ -204,20 +211,20 @@
      <div class="nd-body">
       <KTabs v-model="activeTab" :tabs="tabs" />
 
-      <!-- KAi page status — a thin, dynamic status bar reflecting this network's health -->
-      <KaiStatusBar
-        class="nd-kai"
-        :severity="kaiSeverity"
-        :count-label="kaiCountLabel"
-        :one-liner="kaiOneLiner"
-        :insights="kaiInsights"
-        :actions="kaiActions"
-        data-testid="kai-network-summary"
-        @action="onKaiAction"
-      />
-
       <!-- ── Overview tab ─────────────────────────────────────── -->
       <div v-if="activeTab === '#overview'" class="tab-content">
+
+        <!-- KAi page status — lives on the network's Overview (its home), not across every tab -->
+        <KaiStatusBar
+          class="nd-kai"
+          :severity="kaiSeverity"
+          :count-label="kaiCountLabel"
+          :one-liner="kaiOneLiner"
+          :insights="kaiInsights"
+          :actions="kaiActions"
+          data-testid="kai-network-summary"
+          @action="onKaiAction"
+        />
 
         <!-- Next steps (conditional) — surfaced first so the primary action is up top -->
         <section
