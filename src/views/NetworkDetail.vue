@@ -335,7 +335,7 @@
                   <AddCircleIcon decorative />
                   Add connection
                 </KButton>
-                <KButton appearance="tertiary">Learn more</KButton>
+                <KButton appearance="tertiary" @click="openDocs">Learn more</KButton>
               </div>
             </div>
           </section>
@@ -371,7 +371,7 @@
                   <AddCircleIcon decorative />
                   Add private DNS
                 </KButton>
-                <KButton appearance="tertiary">Learn more</KButton>
+                <KButton appearance="tertiary" @click="openDocs">Learn more</KButton>
               </div>
             </div>
           </section>
@@ -928,6 +928,10 @@ const simulateReady = () => {
 
 const goToAddConnection = () => {
   router.push({ name: 'networks-add-connection', params: { id: networkId.value } })
+}
+
+const openDocs = () => {
+  window.open('https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/', '_blank')
 }
 
 const goToConnection = (connId: string) => {

@@ -11,7 +11,7 @@
     <div class="kaichat-header">
       <span class="kaichat-title">
         <SparklesIcon class="kaichat-spark" :size="KUI_ICON_SIZE_30" decorative />
-        Set up with KAi
+        {{ isAdvisor ? 'Ask KAi' : 'Set up with KAi' }}
       </span>
       <div class="kaichat-head-actions">
         <button type="button" class="kaichat-iconbtn" aria-label="New chat" data-testid="kai-chat-restart" @click="restart">
@@ -160,6 +160,21 @@
             </div>
           </div>
         </template>
+
+        <!-- Advisor: suggested questions to ask -->
+        <div v-if="isAdvisor && suggestions.length" class="kai-suggestions">
+          <span class="kai-suggestions-label">Try asking</span>
+          <button
+            v-for="s in suggestions"
+            :key="s.q"
+            type="button"
+            class="kai-suggestion"
+            data-testid="kai-suggestion"
+            @click="askQuestion(s)"
+          >
+            {{ s.q }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -200,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { KButton, KSelect } from '@kong/kongponents'
 import {
@@ -252,6 +267,10 @@ interface Msg {
 const messages = ref<Msg[]>([])
 const draft = ref('')
 const contextChips = ref<string[]>([])
+// Advisor mode ('ask'): suggested starter questions shown under the thread.
+interface QA { q: string; a: string }
+const suggestions = ref<QA[]>([])
+const isAdvisor = computed(() => launch.value?.mode === 'ask')
 let mid = 0
 
 // Collected answers across the conversation.
@@ -320,7 +339,9 @@ const start = () => {
   messages.value = []
   mid = 0
   answers.plan = []
+  suggestions.value = []
   const net = targetNetwork()
+  if (l.mode === 'ask') { startAdvisor(); return }
   if (l.mode === 'add-connectivity' && net) {
     answers.cloud = net.cloud
     answers.region = net.regions[0].region
@@ -343,6 +364,78 @@ const deriveChips = (prompt: string): string[] => {
   if (m) chips.push(m[1].toLowerCase())
   if (/aws/i.test(prompt)) chips.push('aws')
   return chips.length ? chips : ['my-service']
+}
+
+// ── Advisor ('ask') — the networking buddy: answers the hard decisions, doesn't build ──
+// Grounded answers to the questions the UI's own help text says people get stuck on
+// (CIDR sizing, REP vs peering, cloud-side RAM share, DNS type, errors).
+const KB: Record<string, QA[]> = {
+  'connection-method': [
+    { q: 'Resource endpoint or VPC peering — which should I use?', a: 'A resource endpoint is service-scoped and one-way: it exposes only the service you share, either Kong → your upstreams (egress) or your clients → Kong (ingress). VPC peering (and Transit Gateway) is network-level and bidirectional — it routes between whole VPCs, which is broader access. Use a resource endpoint to expose specific services with least privilege; use peering when you genuinely need full network-to-network routing.' },
+    { q: 'Do I want ingress or egress?', a: 'Egress (Kong → upstream) is the common case — Kong calls into your private APIs and services. Ingress (client → Kong) is for inbound access to Kong from your private network. A resource endpoint only works one direction each, so pick egress to reach your upstreams and ingress to let your clients reach Kong privately.' },
+    { q: 'What will I need to do on my cloud side?', a: 'For an AWS resource endpoint, Kong creates a RAM resource share. You then accept it in AWS Resource Access Manager and create a VPC endpoint from the shared resource in the subnets your clients use. The connection stays “Pending customer action” until you finish that — I can walk you through it.' },
+  ],
+  cidr: [
+    { q: 'How should I size my CIDR?', a: 'Pick a range you’ll never outgrow — the CIDR is permanent and can’t be resized. If you run out of addresses you’d have to recreate the whole network. A /16 (~65,000 addresses) is a safe default. The prefix must be between /16 and /23; /23 is the smallest and supports up to 3 availability zones.' },
+    { q: 'What ranges am I allowed to use?', a: 'It must be a private range — within 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, or 198.18.0.0/15. Don’t overlap a range your organization already uses, since overlaps break VPC peering. 10.100.0.0/16 and 172.17.0.0/16 are reserved.' },
+  ],
+  'ram-share': [
+    { q: 'What’s my next step to finish this connection?', a: 'This connection is waiting on you. Kong has provisioned its side and created an AWS RAM resource share. In your AWS account: open Resource Access Manager, accept the share, then create a VPC endpoint of type Resource in the subnets your clients use. Once that’s done, the connection activates on its own.' },
+    { q: 'Where do I find the RAM share?', a: 'In the AWS console, go to Resource Access Manager → Shared with me → Resource shares. Accept the share from Kong, then create the VPC endpoint. The connection’s setup values (on its detail page) include the RAM share ARN to match against.' },
+  ],
+  'dns-type': [
+    { q: 'Private hosted zone or outbound resolver?', a: 'A private hosted zone means Kong hosts the zone and answers queries for that domain from the network — use it to resolve your internal names to addresses on this network. An outbound resolver forwards matching queries to a resolver endpoint you already run in your cloud — use it when your existing resolver should answer.' },
+  ],
+  error: [
+    { q: 'Why isn’t my DNS resolving?', a: 'Usually the resolver endpoint is unreachable from the network: queries reach the network but the resolver doesn’t answer. Confirm the outbound resolver (or hosted zone) exists and is associated with this network, check the target it points to, then re-check the status.' },
+    { q: 'How do I fix a connection that’s in error?', a: 'Check that the target resource exists and is reachable, confirm any cloud-side steps (like accepting the AWS RAM share) are done, then re-check the connection status. If it stays in error, the connection’s Events tab shows what failed.' },
+  ],
+  general: [
+    { q: 'What’s the difference between a network and a gateway?', a: 'A network is a private, single-cloud, single-region space in your cloud where Kong runs Dedicated Cloud Gateways, plus the private connectivity and DNS it needs. A gateway (control plane + data plane) runs inside a network. You create the network first, then attach gateways and add connectivity.' },
+    { q: 'Which private connectivity option should I use?', a: 'A resource endpoint exposes specific services one-way with least privilege (egress = Kong reaches your upstreams; ingress = clients reach Kong). VPC peering / Transit Gateway routes whole networks bidirectionally. Start with a resource endpoint unless you need full network routing.' },
+    { q: 'How should I size my CIDR?', a: 'The CIDR is permanent and can’t be resized, so choose a range large enough to grow into — a /16 (~65,000 addresses) is a safe default. It must be a private range and must not overlap ranges you already use, or peering breaks.' },
+  ],
+}
+
+const advisorGreeting: Record<string, string> = {
+  'connection-method': 'Deciding how to connect this network? Ask me anything — here are the common questions.',
+  cidr: 'The CIDR is permanent, so it’s worth getting right. Ask me about sizing or allowed ranges.',
+  'ram-share': 'This connection needs a step in your cloud account. I can walk you through it.',
+  'dns-type': 'Not sure which DNS type to pick? Ask away.',
+  error: 'Something isn’t healthy. Tell me what you’re seeing and I’ll help you resolve it.',
+  general: 'I’m your networking buddy — ask me about private connectivity, CIDR ranges, DNS, or fixing errors.',
+}
+
+const startAdvisor = () => {
+  const net = targetNetwork()
+  const topic = launch.value?.topic ?? 'general'
+  contextChips.value = net ? [net.name] : []
+  suggestions.value = KB[topic] ?? KB.general
+  pushKai({ text: advisorGreeting[topic] ?? advisorGreeting.general })
+  if (launch.value?.prompt) askQuestion({ q: launch.value.prompt, a: answerFor(launch.value.prompt) })
+}
+
+// Match free text to the closest known answer; fall back to a helpful default.
+const answerFor = (text: string): string => {
+  const t = text.toLowerCase()
+  const all = Object.values(KB).flat()
+  const hit = all.find(qa => {
+    const words = qa.q.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(w => w.length > 3)
+    return words.some(w => t.includes(w))
+  })
+  if (hit) return hit.a
+  if (/cidr|range|prefix|\/\d/.test(t)) return KB.cidr[0].a
+  if (/peer|resource endpoint|rep|ingress|egress|connect/.test(t)) return KB['connection-method'][0].a
+  if (/ram|share|pending|accept|aws/.test(t)) return KB['ram-share'][0].a
+  if (/dns|resolve|hosted zone|resolver/.test(t)) return KB['dns-type'][0].a
+  if (/error|fail|not working|broken|down/.test(t)) return KB.error[0].a
+  return 'Good question. In this prototype I can help with private connectivity choices (resource endpoint vs peering), CIDR sizing, the cloud-side RAM share steps, DNS type, and resolving errors. Pick one of the suggestions, or ask me about any of those.'
+}
+
+const askQuestion = (qa: QA) => {
+  pushUser(qa.q)
+  suggestions.value = suggestions.value.filter(s => s.q !== qa.q)
+  pushKai({ text: qa.a })
 }
 
 const askProvider = () => {
@@ -536,8 +629,13 @@ const apply = () => {
 const sendDraft = () => {
   const t = draft.value.trim()
   if (!t) return
-  pushUser(t)
   draft.value = ''
+  if (isAdvisor.value) {
+    pushUser(t)
+    pushKai({ text: answerFor(t) })
+    return
+  }
+  pushUser(t)
   pushKai({ text: 'Use the options above and I’ll take it from there — that keeps your setup accurate.' })
 }
 const removeChip = (c: string) => { contextChips.value = contextChips.value.filter(x => x !== c) }
@@ -713,6 +811,29 @@ watch(isOpen, (open) => { if (open) start() })
 .kcard-foot { display: flex; gap: $kui-space-40; justify-content: flex-end; margin-top: $kui-space-40; }
 
 .kai-cta { display: flex; }
+
+// Advisor suggested questions
+.kai-suggestions { display: flex; flex-direction: column; align-items: flex-start; gap: $kui-space-40; }
+.kai-suggestions-label {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  font-weight: $kui-font-weight-semibold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.kai-suggestion {
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-round;
+  color: $kui-color-text;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: $kui-font-size-30;
+  padding: $kui-space-30 $kui-space-50;
+  text-align: left;
+
+  &:hover { border-color: $kui-color-border-decorative-purple; color: $kui-color-text-decorative-purple; }
+}
 
 // Composer
 .kaichat-composer {

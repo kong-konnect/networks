@@ -94,12 +94,14 @@ import type { DetailColumn } from '@/components/DetailTable.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiChat } from '@/composables/useKaiChat'
 import { connectionTypeLabel, timeAgo } from '@/utils/connectionDisplay'
 import type { DnsType, DnsStatus } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const networkId = computed(() => route.params.id as string)
 const dnsId = computed(() => route.params.dnsId as string)
@@ -155,6 +157,12 @@ const kaiActions = computed<KaiAction[]>(() => {
 const onKaiAction = (key: string) => {
   if (key === 'view-conn' && relatedConnection.value) {
     router.push({ name: 'networks-connection-detail', params: { id: networkId.value, connId: relatedConnection.value.id } })
+  } else if (key === 'ask') {
+    openKaiChat({
+      mode: 'ask',
+      topic: dns.value?.status === 'error' ? 'error' : 'dns-type',
+      networkId: networkId.value,
+    })
   }
 }
 

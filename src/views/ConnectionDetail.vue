@@ -164,6 +164,7 @@ import type { DetailColumn } from '@/components/DetailTable.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiChat } from '@/composables/useKaiChat'
 import {
   connectionTypeLabel,
   scopeLabel,
@@ -178,6 +179,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const networkId = computed(() => route.params.id as string)
 const connId = computed(() => route.params.connId as string)
@@ -325,6 +327,13 @@ const kaiActions = computed<KaiAction[]>(() => {
 })
 const onKaiAction = (key: string) => {
   if (key === 'copy-setup') copySetupValues()
+  else if (key === 'ask') {
+    openKaiChat({
+      mode: 'ask',
+      topic: connection.value?.status === 'error' ? 'error' : isPending.value ? 'ram-share' : 'connection-method',
+      networkId: networkId.value,
+    })
+  }
 }
 
 const checkStatus = () => {

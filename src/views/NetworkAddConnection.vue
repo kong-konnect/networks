@@ -34,6 +34,17 @@
       description="Choose how this network connects. Only methods supported by this cloud are shown."
       data-testid="method-chooser"
     >
+      <!-- Proactive advisor at the hardest decision on this form -->
+      <button
+        type="button"
+        class="kai-inline-help"
+        data-testid="kai-help-method"
+        @click="openKaiChat({ mode: 'ask', topic: 'connection-method', networkId })"
+      >
+        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+        Not sure which to choose? Ask KAi
+      </button>
+
       <!-- Directional variant (prototype compare): methods grouped by traffic direction -->
       <template v-if="isDirectional">
         <div
@@ -524,6 +535,24 @@ const handleSubmit = async () => {
 
 <style scoped lang="scss">
 @use "@kong/design-tokens/tokens/scss/variables" as *;
+
+.kai-inline-help {
+  align-items: center;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: $kui-color-text-decorative-purple;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-30;
+  margin-bottom: $kui-space-50;
+  padding: $kui-space-0;
+
+  &:hover { text-decoration: underline; }
+}
 
 .context-row-wrap {
   align-items: center;

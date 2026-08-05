@@ -87,6 +87,15 @@
         title="Network range"
         description="The CIDR block for this network's Dedicated Cloud Gateway. It can't be changed after the network is created, so choose a range large enough for future growth."
       >
+        <button
+          type="button"
+          class="kai-inline-help"
+          data-testid="kai-help-cidr"
+          @click="openKaiChat({ mode: 'ask', topic: 'cidr' })"
+        >
+          <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+          Not sure how to size this? Ask KAi
+        </button>
         <div class="form-group">
           <KLabel :required="true">CIDR range</KLabel>
           <KInput
@@ -448,6 +457,24 @@ const handleCreate = () => {
   gap: $kui-space-80;
   margin: $kui-space-0 auto;
   max-width: 760px;
+}
+
+.kai-inline-help {
+  align-items: center;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: $kui-color-text-decorative-purple;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-30;
+  margin-bottom: $kui-space-50;
+  padding: $kui-space-0;
+
+  &:hover { text-decoration: underline; }
 }
 
 // Guidance list inside a form section's info column (e.g. CIDR requirements).

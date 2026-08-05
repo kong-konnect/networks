@@ -15,7 +15,7 @@
 
     <!-- Right: utility controls — production GlobalAppNavbar.navbar-controls-container -->
     <div class="navbar-controls-container">
-      <button class="ask-kai-btn" type="button" aria-label="Ask KAi">
+      <button class="ask-kai-btn" type="button" aria-label="Ask KAi" @click="openKaiChat({ mode: 'ask' })">
         <svg
           class="ask-kai-icon"
           fill="none"
@@ -75,6 +75,9 @@ import { HelpOutlineIcon, NotificationOutlineIcon, UnfoldMoreIcon, FlagUsIcon } 
 import { KUI_ICON_SIZE_30 } from '@kong/design-tokens'
 import GruceLogo from './GruceLogo.vue'
 import AccountDropdown from './AccountDropdown.vue'
+import { useKaiChat } from '@/composables/useKaiChat'
+
+const { openKaiChat } = useKaiChat()
 
 const props = defineProps({
   organizationName: { type: String, default: 'Kong Design' },
