@@ -123,7 +123,7 @@
           <KBadge :appearance="toneAppearance(selectedNode.tone)">{{ selectedNode.statusLabel }}</KBadge>
         </div>
 
-        <div class="dtabs" role="tablist">
+        <div v-if="detailTabs.length > 1" class="dtabs" role="tablist">
           <button
             v-for="t in detailTabs"
             :key="t.key"
@@ -474,13 +474,18 @@ const onNodeClick = (n: FNode) => {
   openNode(n.id, 'details')
 }
 
+// Only surface a tab when it has something to say for THIS node. A healthy
+// connectivity resource with no downstream and no traced path is just Details —
+// no empty Impact/Path tabs, no tab bar at all.
 const detailTabs = computed(() => {
-  const impactN = selectedNode.value ? selImpact.value.length : 0
-  return [
-    { key: 'details' as const, label: 'Details' },
-    { key: 'impact' as const, label: 'Impact', count: impactN },
-    { key: 'path' as const, label: 'Path' },
-  ]
+  const tabs: { key: DetailTab; label: string; count?: number }[] = [{ key: 'details', label: 'Details' }]
+  if (selImpact.value.length) tabs.push({ key: 'impact', label: 'Impact', count: selImpact.value.length })
+  if (selHops.value.length) tabs.push({ key: 'path', label: 'Path' })
+  return tabs
+})
+// Keep the active tab valid as selection changes (e.g. a node with no Path).
+watch(selectedId, () => {
+  if (selectedNode.value && !detailTabs.value.some(t => t.key === detailTab.value)) detailTab.value = 'details'
 })
 
 const nodeFacts = (n: FNode): { label: string; value: string }[] => {

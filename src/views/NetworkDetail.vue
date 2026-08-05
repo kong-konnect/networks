@@ -177,18 +177,6 @@
       <!-- ── Overview tab ─────────────────────────────────────── -->
       <div v-if="activeTab === '#overview'" class="tab-content">
 
-        <!-- KAi summary card — on the network's Overview (its home), not across every tab -->
-        <KaiSummaryCard
-          class="nd-kai"
-          title="Network health summary"
-          :insights="kaiInsights"
-          :one-liner="kaiOneLiner"
-          :actions="kaiActions"
-          initial-collapsed
-          data-testid="kai-network-summary"
-          @action="onKaiAction"
-        />
-
         <!-- Next steps (conditional) — surfaced first so the primary action is up top -->
         <section
           v-if="showNextStep && nextSteps.length"
@@ -632,8 +620,6 @@ import DetailTable from '@/components/DetailTable.vue'
 import type { DetailColumn } from '@/components/DetailTable.vue'
 import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
@@ -675,61 +661,6 @@ const directionBreakdown = computed(() => {
 })
 
 // ── KAi page status (prototype) ───────────────────────────────────────────────
-// A thin, dynamic status bar reflecting THIS network's real health — severity, a
-// one-line summary, and (expanded) the specifics + deep-link actions.
-const kaiProblems = computed(() => ({
-  dnsErr: dnsList.value.filter(d => d.status === 'error'),
-  dnsPending: dnsList.value.filter(d => d.status === 'pending'),
-  connBad: connections.value.filter(c => c.status === 'error' || c.status === 'pending-user-action' || c.status === 'pending-acceptance'),
-  connErr: connections.value.filter(c => c.status === 'error'),
-  total: dnsList.value.length + connections.value.length,
-}))
-const kaiCount = computed(() => {
-  const p = kaiProblems.value
-  return p.dnsErr.length + p.dnsPending.length + p.connBad.length
-})
-const kaiInsights = computed<KaiInsight[]>(() => {
-  const p = kaiProblems.value
-  if (kaiCount.value === 0) {
-    return [{ lead: 'All healthy:', text: `every gateway, connection, and DNS record on ${network.value?.name} is resolving and ready.` }]
-  }
-  const lines: KaiInsight[] = []
-  if (p.dnsErr.length) {
-    lines.push({ lead: 'DNS not resolving:', text: `${p.dnsErr[0].name} is unreachable — its resolver can't be reached from the network.` })
-  }
-  if (p.connBad.length) {
-    lines.push({ lead: 'Connectivity:', text: `${p.connBad[0].name} is ${statusLabel(p.connBad[0].status).toLowerCase()}, so paths that depend on it can't complete.` })
-  }
-  if (p.dnsPending.length) {
-    lines.push({ lead: 'Provisioning:', text: `${p.dnsPending[0].name} is still being set up and should resolve shortly.` })
-  }
-  return lines
-})
-
-const kaiOneLiner = computed(() => {
-  const p = kaiProblems.value
-  return kaiCount.value === 0
-    ? `${network.value?.name} is healthy — nothing needs attention.`
-    : `DNS and connectivity issues on ${network.value?.name}${p.dnsErr[0] ? ` — ${p.dnsErr[0].name} isn't resolving` : ''}.`
-})
-
-const kaiActions = computed<KaiAction[]>(() => {
-  const p = kaiProblems.value
-  const actions: KaiAction[] = []
-  if (p.dnsErr.length) actions.push({ key: 'view-dns', label: `Open ${p.dnsErr[0].name}` })
-  if (p.connBad.length) actions.push({ key: 'review-conn', label: 'Review connectivity' })
-  actions.push({ key: 'ask', label: 'Ask KAi about this' })
-  return actions
-})
-
-const onKaiAction = (key: string) => {
-  if (key === 'view-dns' && kaiProblems.value.dnsErr[0]) {
-    goToDns(kaiProblems.value.dnsErr[0].id)
-  } else if (key === 'review-conn') {
-    viewTab('#connectivity')
-  }
-  // 'ask' is a no-op stub in the prototype (would open the global Ask KAi assistant).
-}
 const showDeleteModal = ref(false)
 const showBlockedModal = ref(false)
 
