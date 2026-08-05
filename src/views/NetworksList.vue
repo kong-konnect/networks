@@ -72,17 +72,6 @@
             </button>
           </div>
 
-          <KaiSummaryCard
-            v-if="kaiSetup.shown.value"
-            class="empty-kai-card"
-            :loading="kaiSetup.loading.value"
-            title="KAi setup plan"
-            :insights="kaiSetupInsights"
-            :actions="kaiSetupActions"
-            data-testid="empty-kai-plan"
-            @action="onKaiSetupAction"
-            @close="kaiSetup.close()"
-          />
         </div>
       </section>
 
@@ -276,15 +265,14 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import { useKaiPanel } from '@/composables/useKaiPanel'
+import { useKaiChat } from '@/composables/useKaiChat'
 import { providerIcon, providerLabel, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { Network } from '@/types'
 
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const statusFilter = ref('')
 const fetcherCacheKey = ref(0)
@@ -321,10 +309,9 @@ const openDocs = () => {
 }
 
 // ── KAi setup assist (Day 1 empty state) ──────────────────────────────────────
-// Describe the goal → KAi proposes the whole setup (network + connectivity + DNS) and
-// can kick off creation. This is the "start with KAi" entry point for first-time setup.
+// Describe the goal → opens the shared KAi conversational surface, which asks a
+// couple of questions and sets up the network + connectivity + DNS.
 const kaiPrompt = ref('')
-const kaiSetup = useKaiPanel(1100)
 const kaiExamples = [
   'Private access to our payments API in AWS',
   'Peer with our production VPC',
@@ -336,17 +323,8 @@ const useKaiExample = (ex: string) => {
 }
 const runKaiSetup = () => {
   if (!kaiPrompt.value.trim()) return
-  kaiSetup.run()
-}
-const kaiSetupInsights = computed<KaiInsight[]>(() => [
-  { lead: 'Here\'s a plan:', text: 'create a private network in AWS (us-east-1) with a /16 CIDR across 3 availability zones — room to grow, and the CIDR can\'t change later.' },
-  { text: 'Then add a resource-endpoint connection so the gateway can reach your upstreams privately, and a private hosted zone to resolve your internal service names.' },
-])
-const kaiSetupActions: KaiAction[] = [
-  { key: 'create', label: 'Create network with these settings' },
-]
-const onKaiSetupAction = (key: string) => {
-  if (key === 'create') router.push({ name: 'networks-create' })
+  openKaiChat({ mode: 'network-setup', prompt: kaiPrompt.value.trim() })
+  kaiPrompt.value = ''
 }
 
 const fetcher = async () => {

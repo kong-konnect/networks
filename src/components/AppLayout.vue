@@ -33,6 +33,9 @@
   <!-- Prototype-only meta-controls (Day 1 / Day n, connectivity view) — one dockable
        panel, bottom-left. Not a product control. -->
   <PrototypeControls />
+
+  <!-- Shared KAi conversational setup surface (opened from the empty state or a network) -->
+  <KaiChat />
 </template>
 
 <script setup lang="ts">
@@ -41,6 +44,7 @@ import Sidebar from './Sidebar.vue'
 import LegacyNavbar from './LegacyNavbar.vue'
 import LegacySidebar from './LegacySidebar.vue'
 import PrototypeControls from './PrototypeControls.vue'
+import KaiChat from './KaiChat.vue'
 import { useNavVersion } from '@/composables'
 
 const { isNewNav } = useNavVersion()

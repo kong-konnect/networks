@@ -39,7 +39,14 @@
         </KButton>
         <template #items>
           <KDropdownItem
+            data-testid="network-setup-kai"
+            @click="openKaiChat({ mode: 'add-connectivity', networkId: network.id })"
+          >
+            Set up with KAi
+          </KDropdownItem>
+          <KDropdownItem
             data-testid="network-add-connection"
+            has-divider
             @click="goToAddConnection"
           >
             Add connection
@@ -616,6 +623,7 @@ import NetworkCommunicationMap from '@/components/NetworkCommunicationMap.vue'
 import ConnectivityDirectionView from '@/components/ConnectivityDirectionView.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiChat } from '@/composables/useKaiChat'
 import type { CloudProvider, NetworkStatus, DnsType, DnsStatus } from '@/types'
 import {
   connectionTypeLabel,
@@ -629,6 +637,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const networkId = computed(() => route.params.id as string)
 const network = computed(() => store.getNetworkById(networkId.value))
