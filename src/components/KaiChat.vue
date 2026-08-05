@@ -226,8 +226,10 @@ const router = useRouter()
 const store = useNetworksStore()
 
 interface ChoiceOption { value: string; label: string; desc?: string; checked?: boolean }
+type ChoiceStep = 'provider' | 'region' | 'direction'
 interface Card {
   type: 'choice' | 'checklist' | 'confirm'
+  step?: ChoiceStep
   question: string
   options: ChoiceOption[]
   other?: { label: string; value: string }[]
@@ -266,12 +268,30 @@ const scrollToEnd = () => nextTick(() => { if (scrollEl.value) scrollEl.value.sc
 const pushKai = (partial: Omit<Msg, 'id' | 'role'>) => { messages.value.push({ id: ++mid, role: 'kai', ...partial }); scrollToEnd() }
 const pushUser = (text: string) => { messages.value.push({ id: ++mid, role: 'user', text }); scrollToEnd() }
 
-// ── Region + connection helpers ───────────────────────────────────────────────
-const regionOptions = [
-  { label: 'AWS · US East (us-east-1)', value: 'aws:us-east-1' },
-  { label: 'AWS · US West (us-west-2)', value: 'aws:us-west-2' },
-  { label: 'GCP · US Central (us-central1)', value: 'gcp:us-central1' },
+// ── Provider + region + connection helpers ────────────────────────────────────
+const providerOptions: { value: CloudProvider; label: string; desc: string }[] = [
+  { value: 'aws', label: 'AWS', desc: 'Amazon Web Services.' },
+  { value: 'gcp', label: 'GCP', desc: 'Google Cloud Platform.' },
+  { value: 'azure', label: 'Azure', desc: 'Microsoft Azure.' },
 ]
+const providerLabel: Record<string, string> = { aws: 'AWS', gcp: 'GCP', azure: 'Azure', no: 'No — help me create a network' }
+const DEFAULT_REGION: Record<CloudProvider, string> = { aws: 'us-east-1', gcp: 'us-central1', azure: 'eastus' }
+const regionsByCloud: Record<CloudProvider, { value: string; label: string }[]> = {
+  aws: [
+    { value: 'us-east-1', label: 'US East (us-east-1)' },
+    { value: 'us-west-2', label: 'US West (us-west-2)' },
+    { value: 'eu-west-1', label: 'EU West (eu-west-1)' },
+  ],
+  gcp: [
+    { value: 'us-central1', label: 'US Central (us-central1)' },
+    { value: 'europe-west1', label: 'Europe West (europe-west1)' },
+  ],
+  azure: [
+    { value: 'eastus', label: 'East US (eastus)' },
+    { value: 'westeurope', label: 'West Europe (westeurope)' },
+  ],
+}
+const regionLabel = (cloud: CloudProvider, region: string) => regionsByCloud[cloud]?.find(r => r.value === region)?.label ?? region
 const zonesFor = (region: string) => region === 'us-east-1' ? ['use1-az1', 'use1-az2'] : [`${region}-a`, `${region}-b`]
 
 const directionLabel: Record<string, string> = {
@@ -280,9 +300,16 @@ const directionLabel: Record<string, string> = {
   peering: 'Peer two private networks',
 }
 const connFor = (dir: string, cloud: CloudProvider): { type: ConnectionType; family: ConnectionFamily; direction: ConnectionDirection; name: string } => {
-  if (dir === 'peering') return { type: cloud === 'gcp' ? 'gcp-vpc-peering' : 'aws-vpc-peering', family: 'peering', direction: 'egress', name: `${cloud}-vpc-peer` }
-  if (dir === 'ingress') return { type: cloud === 'gcp' ? 'gcp-psc-ingress' : 'aws-rep-ingress', family: 'private-endpoint', direction: 'ingress', name: `${cloud}-rep-ingress` }
-  return { type: cloud === 'gcp' ? 'gcp-psc-egress' : 'aws-rep-egress', family: 'private-endpoint', direction: 'egress', name: `${cloud}-rep-egress` }
+  if (dir === 'peering') {
+    const type: ConnectionType = cloud === 'gcp' ? 'gcp-vpc-peering' : cloud === 'azure' ? 'azure-vnet-peering' : 'aws-vpc-peering'
+    return { type, family: 'peering', direction: 'egress', name: `${cloud}-vpc-peer` }
+  }
+  if (dir === 'ingress') {
+    const type: ConnectionType = cloud === 'gcp' ? 'gcp-psc-ingress' : cloud === 'azure' ? 'azure-private-link-ingress' : 'aws-rep-ingress'
+    return { type, family: 'private-endpoint', direction: 'ingress', name: `${cloud}-rep-ingress` }
+  }
+  const type: ConnectionType = cloud === 'gcp' ? 'gcp-psc-egress' : cloud === 'azure' ? 'azure-private-endpoint-egress' : 'aws-rep-egress'
+  return { type, family: 'private-endpoint', direction: 'egress', name: `${cloud}-rep-egress` }
 }
 const targetNetwork = () => launch.value?.networkId ? store.getNetworkById(launch.value.networkId) : undefined
 
@@ -304,7 +331,10 @@ const start = () => {
     contextChips.value = deriveChips(l.prompt ?? '')
   }
   if (l.prompt) pushUser(l.prompt)
-  askDirection()
+  // Network creation starts with the provider (a network is single-cloud);
+  // adding to an existing network already knows its cloud, so it starts at direction.
+  if (net) askDirection()
+  else askProvider()
 }
 
 const deriveChips = (prompt: string): string[] => {
@@ -315,18 +345,50 @@ const deriveChips = (prompt: string): string[] => {
   return chips.length ? chips : ['my-service']
 }
 
+const askProvider = () => {
+  pushKai({
+    thinking: 'A network is single-cloud and single-region — the provider is the first thing to pin down, and it can’t change later…',
+    thinkingOpen: false,
+    text: 'Let’s create your network. Do you have a cloud provider in mind?',
+    card: {
+      type: 'choice',
+      step: 'provider',
+      question: 'Do you have a provider?',
+      selected: 'aws',
+      options: [
+        ...providerOptions,
+        { value: 'no', label: 'No — help me create a network', desc: 'KAi picks a sensible default (AWS · US East) that you can change by creating a different network later.' },
+      ],
+    },
+  })
+}
+
+const askRegion = () => {
+  pushKai({
+    text: `Which ${answers.cloud.toUpperCase()} region should it run in? The region can’t change once the network is created.`,
+    card: {
+      type: 'choice',
+      step: 'region',
+      question: `Which ${answers.cloud.toUpperCase()} region?`,
+      selected: DEFAULT_REGION[answers.cloud],
+      options: regionsByCloud[answers.cloud].map(r => ({ value: r.value, label: r.label })),
+    },
+  })
+}
+
 const askDirection = () => {
   const net = targetNetwork()
   pushKai({
     thinking: net
       ? `Looking at ${net.name} (${net.cloud.toUpperCase()} · ${net.regions[0].region}) and what it already has configured…`
-      : 'Reading your request and checking what a network needs before it can carry traffic…',
+      : `Network will be ${answers.cloud.toUpperCase()} · ${answers.region}. Now the connectivity it needs…`,
     thinkingOpen: false,
     text: net
-      ? `I'll help add private connectivity to ${net.name}. First — how should traffic flow?`
-      : `I'll help you set up private connectivity. First — how should traffic flow?`,
+      ? `I'll help add private connectivity to ${net.name}. How should traffic flow?`
+      : 'How should traffic flow through this network?',
     card: {
       type: 'choice',
+      step: 'direction',
       question: 'How should traffic flow?',
       selected: 'egress',
       options: [
@@ -334,18 +396,6 @@ const askDirection = () => {
         { value: 'ingress', label: 'Clients reach my services through Kong', desc: 'Inbound access to Kong from your private network — a resource endpoint (ingress).' },
         { value: 'peering', label: 'Peer two private networks', desc: 'Full network-to-network routing — VPC peering or a transit gateway.' },
       ],
-    },
-  })
-}
-
-const askLocation = () => {
-  pushKai({
-    text: 'Where should this network run? Both can’t change once the network is created.',
-    card: {
-      type: 'choice',
-      question: 'Which cloud and region?',
-      selected: 'aws:us-east-1',
-      options: regionOptions.map(r => ({ value: r.value, label: r.label })),
     },
   })
 }
@@ -393,20 +443,35 @@ const listJoin = (a: string[]) => a.length <= 1 ? (a[0] ?? '') : a.length === 2 
 const resolveChoice = (m: Msg) => {
   const card = m.card!
   m.resolved = true
-  if (card.question.startsWith('How should traffic')) {
-    const val = card.selected || 'egress'
-    answers.direction = val
-    pushUser(directionLabel[val] ?? 'Something else')
-    if (targetNetwork()) askPlan()
-    else askLocation()
-  } else {
-    const val = card.selected || card.otherValue || 'aws:us-east-1'
-    const [cloud, region] = val.split(':')
-    answers.cloud = (cloud as CloudProvider) || 'aws'
-    answers.region = region || 'us-east-1'
-    pushUser(regionOptions.find(r => r.value === val)?.label ?? val)
-    askPlan()
+  const val = card.selected || card.otherValue || ''
+
+  if (card.step === 'provider') {
+    if (val === 'no' || !val) {
+      answers.cloud = 'aws'
+      answers.region = DEFAULT_REGION.aws
+      pushUser(providerLabel.no)
+      pushKai({ text: `No problem — I'll use AWS in ${regionLabel('aws', answers.region)}, the most common setup. You can create a network on another provider later.` })
+      askDirection()
+    } else {
+      answers.cloud = val as CloudProvider
+      answers.region = DEFAULT_REGION[answers.cloud]
+      pushUser(providerLabel[val] ?? val)
+      askRegion()
+    }
+    return
   }
+
+  if (card.step === 'region') {
+    answers.region = val || DEFAULT_REGION[answers.cloud]
+    pushUser(`${answers.cloud.toUpperCase()} · ${regionLabel(answers.cloud, answers.region)}`)
+    askDirection()
+    return
+  }
+
+  // direction
+  answers.direction = val || 'egress'
+  pushUser(directionLabel[answers.direction] ?? 'Something else')
+  askPlan()
 }
 
 const resolveChecklist = (m: Msg) => {
