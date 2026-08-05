@@ -40,11 +40,16 @@
       @close="kaiShown = false"
     />
 
-    <!-- Step 1 — choose method -->
-    <EntityFormBlock
-      :step="1"
-      title="Choose connection method"
-      description="Only connection methods supported by this network are shown."
+    <EntityBaseForm
+      entity-type="connection"
+      :can-submit="!!selectedMethod && !!form.name.trim() && !isSubmitting && (!prerequisite || acknowledged)"
+      @submit="handleSubmit"
+      @cancel="cancel"
+    >
+    <!-- Choose method -->
+    <EntityFormSection
+      title="Connection method"
+      description="Choose how this network connects. Only methods supported by this cloud are shown."
       data-testid="method-chooser"
     >
       <!-- Directional variant (prototype compare): methods grouped by traffic direction -->
@@ -110,13 +115,13 @@
           </div>
         </label>
       </div>
-    </EntityFormBlock>
+    </EntityFormSection>
 
-    <!-- Step 2 — configure (same continuous page) -->
-    <EntityFormBlock
-      :step="2"
+    <!-- Configure -->
+    <EntityFormSection
       title="Configure connection"
       :description="selectedMethod ? selectedMethod.formHelp : 'Select a connection method above to configure it.'"
+      has-divider
       data-testid="method-form"
     >
       <p
@@ -175,19 +180,25 @@
           </KCheckbox>
         </section>
       </template>
-    </EntityFormBlock>
+    </EntityFormSection>
 
-    <WizardFooter>
-      <KButton
-        appearance="primary"
-        :disabled="!selectedMethod || !form.name.trim() || isSubmitting || (!!prerequisite && !acknowledged)"
-        data-testid="create-connection"
-        @click="handleSubmit"
-      >
-        Create connection
-      </KButton>
-      <KButton appearance="secondary" @click="cancel">Cancel</KButton>
-    </WizardFooter>
+      <template #form-actions>
+        <KButton
+          appearance="tertiary"
+          @click="cancel"
+        >
+          Cancel
+        </KButton>
+        <KButton
+          appearance="primary"
+          :disabled="!selectedMethod || !form.name.trim() || isSubmitting || (!!prerequisite && !acknowledged)"
+          data-testid="create-connection"
+          @click="handleSubmit"
+        >
+          Create connection
+        </KButton>
+      </template>
+    </EntityBaseForm>
   </PageLayout>
 
   <div v-else class="not-found">
@@ -216,8 +227,8 @@ import {
 import { ExternalLinkIcon, SparklesIcon } from '@kong/icons'
 import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import PageLayout from '@/components/PageLayout.vue'
-import WizardFooter from '@/components/WizardFooter.vue'
-import EntityFormBlock from '@/components/EntityFormBlock.vue'
+import EntityBaseForm from '@/components/EntityBaseForm.vue'
+import EntityFormSection from '@/components/EntityFormSection.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'

@@ -41,13 +41,16 @@
             @close="kaiCfg.close()"
           />
 
-          <section class="form-card" data-testid="dns-create-form">
-            <div class="form-section">
-              <div class="section-heading">
-                <h2 class="section-title">Private DNS details</h2>
-                <p class="section-help">Private DNS resolves private service names reached through this network.</p>
-              </div>
-
+          <EntityBaseForm
+            entity-type="dns"
+            :can-submit="canCreate && !isSubmitting"
+            @submit="handleCreate"
+            @cancel="goBack"
+          >
+            <EntityFormSection
+              title="Private DNS details"
+              description="Private DNS resolves private service names reached through this network. It starts in a pending state and resolves once its underlying connectivity is ready."
+            >
               <div class="form-group">
                 <KLabel :required="true">Name / domain</KLabel>
                 <KInput
@@ -78,34 +81,32 @@
                   width="100%"
                 />
               </div>
+            </EntityFormSection>
 
-              <p class="field-help">Provisioning starts once added. This DNS configuration begins in a pending state until it resolves.</p>
-            </div>
-          </section>
-
-          <WizardFooter>
-            <KButton
-              appearance="primary"
-              :disabled="!canCreate || isSubmitting"
-              data-testid="dns-create-button"
-              @click="handleCreate"
-            >
-              <ProgressIcon
-                v-if="isSubmitting"
-                class="btn-spinner"
-                :size="KUI_ICON_SIZE_20"
-                decorative
-              />
-              {{ isSubmitting ? 'Adding…' : 'Add private DNS' }}
-            </KButton>
-            <KButton
-              appearance="secondary"
-              data-testid="dns-cancel"
-              @click="goBack"
-            >
-              Cancel
-            </KButton>
-          </WizardFooter>
+            <template #form-actions>
+              <KButton
+                appearance="tertiary"
+                data-testid="dns-cancel"
+                @click="goBack"
+              >
+                Cancel
+              </KButton>
+              <KButton
+                appearance="primary"
+                :disabled="!canCreate || isSubmitting"
+                data-testid="dns-create-button"
+                @click="handleCreate"
+              >
+                <ProgressIcon
+                  v-if="isSubmitting"
+                  class="btn-spinner"
+                  :size="KUI_ICON_SIZE_20"
+                  decorative
+                />
+                {{ isSubmitting ? 'Adding…' : 'Add private DNS' }}
+              </KButton>
+            </template>
+          </EntityBaseForm>
     </div>
   </PageLayout>
 
@@ -135,7 +136,8 @@ import {
   ToastManager,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
-import WizardFooter from '@/components/WizardFooter.vue'
+import EntityBaseForm from '@/components/EntityBaseForm.vue'
+import EntityFormSection from '@/components/EntityFormSection.vue'
 import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
 import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
@@ -210,13 +212,13 @@ const handleCreate = () => {
 </script>
 
 <style scoped lang="scss">
-// Single column, centered — same balanced setup structure as create-network.
+// Konnect form language (EntityBaseForm + two-column EntityFormSection) — matches create-network.
 .dns-create {
   display: flex;
   flex-direction: column;
   gap: $kui-space-70;
   margin: $kui-space-0 auto;
-  max-width: 760px;
+  max-width: 1080px;
   padding-top: $kui-space-60;
 }
 
