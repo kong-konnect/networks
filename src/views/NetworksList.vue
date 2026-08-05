@@ -35,6 +35,55 @@
             Learn more
           </KButton>
         </div>
+
+        <!-- KAi setup assist — describe the goal, KAi proposes the network + connectivity + DNS -->
+        <div class="empty-kai">
+          <div class="empty-kai-input" :class="{ 'is-focused': kaiPrompt.length > 0 }">
+            <SparklesIcon class="empty-kai-spark" :size="KUI_ICON_SIZE_30" decorative />
+            <input
+              v-model="kaiPrompt"
+              class="empty-kai-field"
+              type="text"
+              placeholder="Describe what you're connecting and KAi will set it up…"
+              data-testid="empty-kai-input"
+              @keyup.enter="runKaiSetup"
+            >
+            <button
+              type="button"
+              class="empty-kai-send"
+              :disabled="!kaiPrompt.trim()"
+              aria-label="Ask KAi"
+              data-testid="empty-kai-send"
+              @click="runKaiSetup"
+            >
+              <ForwardIcon :size="KUI_ICON_SIZE_20" decorative />
+            </button>
+          </div>
+          <div class="empty-kai-chips">
+            <span class="empty-kai-try">Try</span>
+            <button
+              v-for="ex in kaiExamples"
+              :key="ex"
+              type="button"
+              class="empty-kai-chip"
+              @click="useKaiExample(ex)"
+            >
+              {{ ex }}
+            </button>
+          </div>
+
+          <KaiSummaryCard
+            v-if="kaiSetup.shown.value"
+            class="empty-kai-card"
+            :loading="kaiSetup.loading.value"
+            title="KAi setup plan"
+            :insights="kaiSetupInsights"
+            :actions="kaiSetupActions"
+            data-testid="empty-kai-plan"
+            @action="onKaiSetupAction"
+            @close="kaiSetup.close()"
+          />
+        </div>
         <!-- How a network sits between your clients and your services -->
         <div class="empty-diagram" aria-hidden="true">
           <div class="flow-node">
@@ -236,7 +285,9 @@ import {
 import {
   AddCircleIcon,
   ConnectionsIcon,
+  ForwardIcon,
   PeopleIcon,
+  SparklesIcon,
   StackIcon,
   WarningIcon,
   WorldPrivateIcon,
@@ -253,7 +304,10 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityBaseTable from '@/components/EntityBaseTable.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiPanel } from '@/composables/useKaiPanel'
 import { providerIcon, providerLabel, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { Network } from '@/types'
 
@@ -292,6 +346,35 @@ const isEmpty = computed(() => visibleNetworks.value.length === 0)
 
 const openDocs = () => {
   window.open('https://docs.konghq.com/konnect/gateway-manager/dedicated-cloud-gateways/', '_blank')
+}
+
+// ── KAi setup assist (Day 1 empty state) ──────────────────────────────────────
+// Describe the goal → KAi proposes the whole setup (network + connectivity + DNS) and
+// can kick off creation. This is the "start with KAi" entry point for first-time setup.
+const kaiPrompt = ref('')
+const kaiSetup = useKaiPanel(1100)
+const kaiExamples = [
+  'Private access to our payments API in AWS',
+  'Peer with our production VPC',
+  'Resolve internal service DNS',
+]
+const useKaiExample = (ex: string) => {
+  kaiPrompt.value = ex
+  runKaiSetup()
+}
+const runKaiSetup = () => {
+  if (!kaiPrompt.value.trim()) return
+  kaiSetup.run()
+}
+const kaiSetupInsights = computed<KaiInsight[]>(() => [
+  { lead: 'Here\'s a plan:', text: 'create a private network in AWS (us-east-1) with a /16 CIDR across 3 availability zones — room to grow, and the CIDR can\'t change later.' },
+  { text: 'Then add a resource-endpoint connection so the gateway can reach your upstreams privately, and a private hosted zone to resolve your internal service names.' },
+])
+const kaiSetupActions: KaiAction[] = [
+  { key: 'create', label: 'Create network with these settings' },
+]
+const onKaiSetupAction = (key: string) => {
+  if (key === 'create') router.push({ name: 'networks-create' })
 }
 
 const fetcher = async () => {
@@ -434,8 +517,78 @@ const confirmDelete = () => {
   .empty-actions {
     display: flex;
     gap: $kui-space-40;
-    margin-bottom: $kui-space-90;
+    margin-bottom: $kui-space-70;
   }
+
+  // KAi setup assist
+  .empty-kai {
+    display: flex;
+    flex-direction: column;
+    gap: $kui-space-40;
+    margin-bottom: $kui-space-90;
+    max-width: 560px;
+    width: 100%;
+  }
+
+  .empty-kai-input {
+    align-items: center;
+    background-color: $kui-color-background;
+    border: $kui-border-width-10 solid $kui-color-border-decorative-purple;
+    border-radius: $kui-border-radius-40;
+    display: flex;
+    gap: $kui-space-40;
+    padding: $kui-space-40 $kui-space-50;
+  }
+
+  .empty-kai-spark { color: $kui-color-text-decorative-purple; flex: 0 0 auto; }
+
+  .empty-kai-field {
+    background: none;
+    border: none;
+    color: $kui-color-text;
+    flex: 1;
+    font-size: $kui-font-size-40;
+    outline: none;
+
+    &::placeholder { color: $kui-color-text-neutral; }
+  }
+
+  .empty-kai-send {
+    align-items: center;
+    background-color: $kui-color-background-decorative-purple;
+    border: none;
+    border-radius: $kui-border-radius-30;
+    color: $kui-color-text-inverse;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding: $kui-space-30;
+
+    &:disabled { cursor: not-allowed; opacity: 0.4; }
+  }
+
+  .empty-kai-chips {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: $kui-space-30;
+  }
+
+  .empty-kai-try { color: $kui-color-text-neutral; font-size: $kui-font-size-30; }
+
+  .empty-kai-chip {
+    background-color: $kui-color-background;
+    border: $kui-border-width-10 solid $kui-color-border;
+    border-radius: $kui-border-radius-round;
+    color: $kui-color-text;
+    cursor: pointer;
+    font-size: $kui-font-size-30;
+    padding: $kui-space-30 $kui-space-50;
+
+    &:hover { border-color: $kui-color-border-decorative-purple; color: $kui-color-text-decorative-purple; }
+  }
+
+  .empty-kai-card { text-align: left; }
 
   // Flow explainer: Client → Kong network → your services (Request / Response).
   .empty-diagram {

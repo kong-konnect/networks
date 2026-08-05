@@ -8,9 +8,33 @@
       <div class="create-layout">
         <div class="create-main">
       <!-- Orientation (not a blocking gate) -->
-      <KAlert
-        appearance="info"
-        message="A network is provisioned by Kong and takes 45 minutes or more to become ready. Region and CIDR range are permanent — they can't be changed after creation."
+      <div class="create-kai-row">
+        <KAlert
+          appearance="info"
+          class="create-kai-alert"
+          message="A network is provisioned by Kong and takes 45 minutes or more to become ready. Region and CIDR range are permanent — they can't be changed after creation."
+        />
+        <button
+          v-if="!kaiCfg.shown.value"
+          type="button"
+          class="kai-configure-link"
+          data-testid="create-kai-configure"
+          @click="kaiCfg.run()"
+        >
+          <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+          Configure with KAi
+        </button>
+      </div>
+
+      <KaiSummaryCard
+        v-if="kaiCfg.shown.value"
+        :loading="kaiCfg.loading.value"
+        title="KAi setup suggestion"
+        :insights="kaiCfgInsights"
+        :actions="kaiCfgActions"
+        data-testid="create-kai-suggestion"
+        @action="onKaiCfgAction"
+        @close="kaiCfg.close()"
       />
 
       <section class="form-card" data-testid="network-create-form">
@@ -323,7 +347,7 @@
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { ChevronDownIcon, InfoIcon, ProgressIcon } from '@kong/icons'
+import { ChevronDownIcon, InfoIcon, ProgressIcon, SparklesIcon } from '@kong/icons'
 import {
   KAlert,
   KBadge,
@@ -336,7 +360,10 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiPanel } from '@/composables/useKaiPanel'
 import { providerIcon, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { CloudProvider } from '@/types'
 
@@ -455,6 +482,26 @@ const cidrWarning = computed(() => {
   }
   return ''
 })
+
+// ── KAi setup suggestion ──────────────────────────────────────────────────────
+// Recommends a right-sized, immutable-safe CIDR (and zones) and can apply it — heading
+// off the "too small, can't resize" trap.
+const kaiCfg = useKaiPanel(900)
+const kaiCfgInsights = computed<KaiInsight[]>(() => [
+  { lead: 'Recommended range:', text: 'use 10.0.0.0/16 — about 65,000 addresses. Since the CIDR is permanent, this leaves plenty of room to scale without ever recreating the network.' },
+  { text: `Deploy across all availability zones in ${form.region || 'the region'} for resilience, and keep the range clear of any CIDRs already used in your own cloud.` },
+])
+const kaiCfgActions: KaiAction[] = [
+  { key: 'apply', label: 'Apply recommended settings' },
+]
+const onKaiCfgAction = (key: string) => {
+  if (key === 'apply') {
+    form.cidr = '10.0.0.0/16'
+    if (!form.name.trim()) form.name = `${form.cloud}-${form.region}`
+    if (form.region) form.zones = regionZones(form.region)
+    validateCidr()
+  }
+}
 
 const canCreate = computed(() =>
   form.name.trim() !== '' && !nameError.value &&
@@ -699,6 +746,32 @@ const handleCreate = () => {
   font-size: $kui-font-size-30;
   line-height: $kui-line-height-40;
   margin: $kui-space-0;
+}
+
+.create-kai-row {
+  align-items: flex-start;
+  display: flex;
+  gap: $kui-space-50;
+}
+
+.create-kai-alert { flex: 1; min-width: 0; }
+
+.kai-configure-link {
+  align-items: center;
+  background: none;
+  border: none;
+  color: $kui-color-text-decorative-purple;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  margin-top: $kui-space-30;
+  padding: $kui-space-0;
+  white-space: nowrap;
+
+  &:hover { text-decoration: underline; }
 }
 
 .two-col {

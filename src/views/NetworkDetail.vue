@@ -176,6 +176,13 @@
           </ul>
         </section>
 
+        <!-- KAi reassurance while provisioning -->
+        <KaiSummaryCard
+          title="KAi is watching this setup"
+          :insights="kaiInitInsights"
+          data-testid="kai-initializing"
+        />
+
         <!-- Prototype device: skip the 45-min provisioning wait. Intentionally low-prominence. -->
         <div class="sim-ready">
           <button type="button" class="sim-ready-btn" data-testid="simulate-ready" @click="simulateReady">
@@ -200,6 +207,30 @@
 
       <!-- ── Overview tab ─────────────────────────────────────── -->
       <div v-if="activeTab === '#overview'" class="tab-content">
+        <!-- KAi whole-network summary -->
+        <div v-if="!kaiShown" class="kai-inline-trigger">
+          <KButton
+            appearance="tertiary"
+            class="kai-summarize-link"
+            data-testid="kai-summarize-overview"
+            @click="runKaiSummary"
+          >
+            <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+            Summarize this network with KAi
+          </KButton>
+        </div>
+        <KaiSummaryCard
+          v-if="kaiShown"
+          :loading="kaiLoading"
+          title="Network health summary"
+          :insights="kaiInsights"
+          :one-liner="kaiOneLiner"
+          :actions="kaiActions"
+          data-testid="kai-overview-summary"
+          @action="onKaiAction"
+          @close="kaiShown = false"
+        />
+
         <!-- Next steps (conditional) — surfaced first so the primary action is up top -->
         <section
           v-if="showNextStep && nextSteps.length"
@@ -840,6 +871,11 @@ const runKaiSummary = () => {
   window.setTimeout(() => { kaiLoading.value = false }, 1100)
 }
 
+// Reassurance shown while the network is provisioning.
+const kaiInitInsights = computed<KaiInsight[]>(() => [
+  { text: 'No action needed — provisioning a network takes about 45 minutes. I\'m monitoring the setup and will flag it right here if anything needs you.' },
+])
+
 const onKaiAction = (key: string) => {
   if (key === 'view-dns' && kaiProblems.value.dnsErr[0]) {
     goToDns(kaiProblems.value.dnsErr[0].id)
@@ -1289,6 +1325,12 @@ const confirmDelete = () => {
   .prov-check-row--awaiting & { color: $kui-color-text-warning; font-weight: $kui-font-weight-semibold; }
 }
 
+
+.kai-inline-trigger { display: flex; }
+
+// Tint the sparkle purple on the KAi triggers.
+.kai-summarize-link :deep(svg),
+.kai-summarize-btn :deep(svg) { color: $kui-color-text-decorative-purple; }
 
 .section-header {
   align-items: flex-start;

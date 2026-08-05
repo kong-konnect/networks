@@ -79,6 +79,24 @@
       <template #title>Pending customer action</template>
     </KAlert>
 
+    <!-- KAi remediation when this connection isn't healthy -->
+    <div v-if="connection.status !== 'ready' && !kai.shown.value" class="kai-inline-trigger">
+      <KButton appearance="tertiary" class="kai-summarize-link" data-testid="conn-kai" @click="kai.run()">
+        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+        Explain with KAi
+      </KButton>
+    </div>
+    <KaiSummaryCard
+      v-if="kai.shown.value"
+      :loading="kai.loading.value"
+      title="What KAi found"
+      :insights="kaiInsights"
+      :actions="kaiActions"
+      data-testid="conn-kai-card"
+      @action="onKaiAction"
+      @close="kai.close()"
+    />
+
     <!-- Details -->
     <KCard title="Details">
       <ConfigCardDisplay :property-collections="detailCollections" />
@@ -193,7 +211,8 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CopyIcon, ChevronDownIcon } from '@kong/icons'
+import { CopyIcon, ChevronDownIcon, SparklesIcon } from '@kong/icons'
+import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import {
   KAlert,
   KBadge,
@@ -207,7 +226,10 @@ import {
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiPanel } from '@/composables/useKaiPanel'
 import {
   connectionTypeLabel,
   scopeLabel,
@@ -320,6 +342,35 @@ const copySetupValues = () => {
   copyToClipboard(text)
 }
 
+// ── KAi remediation (when this connection isn't healthy) ──────────────────────
+const kai = useKaiPanel(900)
+const kaiInsights = computed<KaiInsight[]>(() => {
+  const c = connection.value
+  if (!c) return []
+  if (c.status === 'error') {
+    return [
+      { lead: 'Error:', text: c.errorMessage || 'this connection isn\'t working.', tone: 'critical' },
+      { lead: 'To fix:', text: customerSetupCopy.value },
+    ]
+  }
+  if (isPending.value) {
+    return [
+      { lead: 'Waiting on you:', text: 'Kong has provisioned its side. The connection activates once you finish the customer-side setup.' },
+      { lead: 'To fix:', text: customerSetupCopy.value },
+    ]
+  }
+  return [{ text: 'Kong is still setting this connection up. No action is needed yet.' }]
+})
+const kaiActions = computed<KaiAction[]>(() => {
+  const a: KaiAction[] = []
+  if (hasSetupValues.value) a.push({ key: 'copy-setup', label: 'Copy setup values' })
+  a.push({ key: 'ask', label: 'Ask KAi' })
+  return a
+})
+const onKaiAction = (key: string) => {
+  if (key === 'copy-setup') copySetupValues()
+}
+
 const checkStatus = () => {
   // Prototype: no-op status re-check.
 }
@@ -367,6 +418,9 @@ const confirmDelete = () => {
 
 <style scoped lang="scss">
 @use "@kong/design-tokens/tokens/scss/variables" as *;
+
+.kai-inline-trigger { display: flex; }
+.kai-summarize-link :deep(svg) { color: $kui-color-text-decorative-purple; }
 
 .conn-subheader {
   display: flex;

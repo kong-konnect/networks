@@ -55,6 +55,24 @@
       <template #title>Provisioning</template>
     </KAlert>
 
+    <!-- KAi remediation when this DNS isn't healthy -->
+    <div v-if="dns.status !== 'ready' && !kai.shown.value" class="kai-inline-trigger">
+      <KButton appearance="tertiary" class="kai-summarize-link" data-testid="dns-kai" @click="kai.run()">
+        <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+        Explain with KAi
+      </KButton>
+    </div>
+    <KaiSummaryCard
+      v-if="kai.shown.value"
+      :loading="kai.loading.value"
+      title="What KAi found"
+      :insights="kaiInsights"
+      :actions="kaiActions"
+      data-testid="dns-kai-card"
+      @action="onKaiAction"
+      @close="kai.close()"
+    />
+
     <KCard title="Details">
       <ConfigCardDisplay :property-collections="detailCollections" />
     </KCard>
@@ -123,10 +141,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { SparklesIcon } from '@kong/icons'
+import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import { KAlert, KBadge, KButton, KCard, KEmptyState } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
 import ConfigCardDisplay from '@/components/ConfigCardDisplay.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiPanel } from '@/composables/useKaiPanel'
 import { connectionTypeLabel, timeAgo } from '@/utils/connectionDisplay'
 import type { DnsType, DnsStatus } from '@/types'
 
@@ -147,6 +170,33 @@ const breadcrumbs = computed(() => [
   { key: 'network', to: { name: 'networks-detail', params: { id: networkId.value } }, text: network.value?.name || '' },
   { key: 'dns', text: dns.value?.name || '' },
 ])
+
+// ── KAi remediation (when this DNS isn't healthy) ─────────────────────────────
+const kai = useKaiPanel(900)
+const kaiInsights = computed<KaiInsight[]>(() => {
+  const d = dns.value
+  if (!d) return []
+  if (d.status === 'error') {
+    return [
+      { lead: 'Not resolving:', text: `${d.name} can't be reached — ${d.resolverDetails || 'the resolver is unreachable from this network.'}`, tone: 'critical' },
+      { lead: 'To fix:', text: 'confirm the resolver endpoint (or hosted zone) exists and is associated with this network, then re-check the status.' },
+    ]
+  }
+  return [
+    { lead: 'Provisioning:', text: `${d.name} is still being set up and should resolve shortly. No action is needed.` },
+  ]
+})
+const kaiActions = computed<KaiAction[]>(() => {
+  const a: KaiAction[] = []
+  if (relatedConnection.value) a.push({ key: 'view-conn', label: `Open ${relatedConnection.value.name}` })
+  a.push({ key: 'ask', label: 'Ask KAi' })
+  return a
+})
+const onKaiAction = (key: string) => {
+  if (key === 'view-conn' && relatedConnection.value) {
+    router.push({ name: 'networks-connection-detail', params: { id: networkId.value, connId: relatedConnection.value.id } })
+  }
+}
 
 const typeLabel = (type: DnsType) => type === 'outbound-resolver' ? 'Outbound resolver' : 'Private hosted zone'
 const statusLabel = (status: DnsStatus) => status === 'error' ? 'Error' : status === 'pending' ? 'Pending' : 'Ready'
@@ -179,6 +229,9 @@ const handleDelete = () => {
 </script>
 
 <style scoped lang="scss">
+.kai-inline-trigger { display: flex; }
+.kai-summarize-link :deep(svg) { color: $kui-color-text-decorative-purple; }
+
 .dns-subtitle {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-40;

@@ -8,17 +8,40 @@
     <div class="dns-create">
       <div class="create-layout">
         <div class="create-main">
-          <!-- Context banner -->
-          <KCard class="context-banner">
-            <div class="context-row">
-              <span class="context-label">Network</span>
-              <span class="context-value">{{ network.name }}</span>
-            </div>
-            <div class="context-row">
-              <span class="context-label">Cloud</span>
-              <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
-            </div>
-          </KCard>
+          <!-- Context banner + KAi setup assist -->
+          <div class="context-row-wrap">
+            <KCard class="context-banner">
+              <div class="context-row">
+                <span class="context-label">Network</span>
+                <span class="context-value">{{ network.name }}</span>
+              </div>
+              <div class="context-row">
+                <span class="context-label">Cloud</span>
+                <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
+              </div>
+            </KCard>
+            <button
+              v-if="!kaiCfg.shown.value"
+              type="button"
+              class="kai-configure-link"
+              data-testid="dns-kai-configure"
+              @click="kaiCfg.run()"
+            >
+              <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
+              Configure with KAi
+            </button>
+          </div>
+
+          <KaiSummaryCard
+            v-if="kaiCfg.shown.value"
+            :loading="kaiCfg.loading.value"
+            title="KAi setup suggestion"
+            :insights="kaiCfgInsights"
+            :actions="kaiCfgActions"
+            data-testid="dns-kai-suggestion"
+            @action="onKaiCfgAction"
+            @close="kaiCfg.close()"
+          />
 
           <section class="form-card" data-testid="dns-create-form">
             <div class="form-section">
@@ -123,7 +146,7 @@
 import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
-import { InfoIcon, ProgressIcon } from '@kong/icons'
+import { InfoIcon, ProgressIcon, SparklesIcon } from '@kong/icons'
 import {
   KCard,
   KInput,
@@ -134,7 +157,10 @@ import {
   ToastManager,
 } from '@kong/kongponents'
 import PageLayout from '@/components/PageLayout.vue'
+import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
+import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiPanel } from '@/composables/useKaiPanel'
 import type { DnsType } from '@/types'
 
 const route = useRoute()
@@ -165,6 +191,22 @@ const typeHelp = computed(() =>
     ? 'Kong forwards matching queries to a resolver endpoint you run in your cloud.'
     : 'Kong hosts the zone and answers queries for this domain from the network.',
 )
+
+// ── KAi setup suggestion ──────────────────────────────────────────────────────
+const kaiCfg = useKaiPanel(900)
+const kaiCfgInsights = computed<KaiInsight[]>(() => [
+  { lead: 'Recommended:', text: 'to resolve your internal service names (like payments.internal.company.com) to addresses on this network, use a private hosted zone — Kong hosts the zone and answers the queries.' },
+  { text: 'If you instead need to forward lookups to a resolver you already run in your cloud, choose an outbound resolver.' },
+])
+const kaiCfgActions: KaiAction[] = [
+  { key: 'apply', label: 'Use a private hosted zone' },
+]
+const onKaiCfgAction = (key: string) => {
+  if (key === 'apply') {
+    form.type = 'private-hosted-zone'
+    if (!form.usedFor.trim()) form.usedFor = 'Upstream services'
+  }
+}
 
 const canCreate = computed(() => form.name.trim() !== '' && form.usedFor.trim() !== '')
 
@@ -210,11 +252,36 @@ const handleCreate = () => {
   min-width: 0;
 }
 
+.context-row-wrap {
+  align-items: center;
+  display: flex;
+  gap: $kui-space-50;
+  justify-content: space-between;
+}
+
 .context-banner {
+  flex: 1;
+
   :deep(.card-content) {
     display: flex;
     gap: $kui-space-90;
   }
+}
+
+.kai-configure-link {
+  align-items: center;
+  background: none;
+  border: none;
+  color: $kui-color-text-decorative-purple;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  padding: $kui-space-0;
+
+  &:hover { text-decoration: underline; }
 }
 
 .context-row {
