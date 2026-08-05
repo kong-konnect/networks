@@ -45,54 +45,77 @@
       </div>
     </div>
 
-    <!-- ── MAP MODE: entity-relationship diagram ───────────────────────────── -->
+    <!-- ── MAP MODE: dependency diagram ────────────────────────────────────── -->
     <template v-if="mode === 'map'">
       <div class="ncm-body">
-        <div class="dtree" data-testid="ncm-tree">
-          <!-- Root: the network (its resources depend on it as their container) -->
+        <div class="dgraph" data-testid="ncm-tree">
+          <!-- Root node: the network. Everything below depends on it. -->
           <button
             type="button"
-            class="dt-root"
-            :class="{ 'dt-selected': selectedId === null }"
+            class="dnode dnode--root"
+            :class="{ 'dnode--selected': selectedId === null }"
             data-testid="ncm-network"
             @click="selectedId = null"
           >
-            <span class="dt-caret">▾</span>
-            <span class="dt-root-kicker">Network</span>
-            <span class="dt-root-name">{{ network.name }}</span>
-            <span class="dt-root-meta">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }} · {{ network.regions[0].cidr }}</span>
+            <span class="dnode-icon dnode-icon--root">
+              <NetworkIcon :size="KUI_ICON_SIZE_30" decorative />
+            </span>
+            <span class="dnode-body">
+              <span class="dnode-kicker">Network</span>
+              <span class="dnode-name">{{ network.name }}</span>
+              <span class="dnode-meta">
+                <span class="dmeta-chip">{{ network.cloud.toUpperCase() }}</span>
+                <span class="dmeta-chip">{{ network.regions[0].region }}</span>
+                <span class="dmeta-chip">{{ network.regions[0].cidr }}</span>
+              </span>
+            </span>
             <KBadge :appearance="netStatusAppearance">{{ netStatusLabel }}</KBadge>
           </button>
 
-          <div class="dt-branch">
-            <template v-for="g in visibleGroups" :key="g.key">
-              <button type="button" class="dt-group" @click="toggleGroup(g.key)">
-                <span class="dt-caret">{{ openGroups[g.key] ? '▾' : '▸' }}</span>
-                <span class="dt-group-label">{{ g.label }}</span>
-                <span class="dt-count">{{ g.items.length }}</span>
-                <span v-if="groupAttention(g)" class="dt-att">{{ groupAttention(g) }} need attention</span>
+          <!-- Branches: each resource group hangs off the network with a connector. -->
+          <div class="dtree">
+            <div v-for="g in visibleGroups" :key="g.key" class="dtree-branch">
+              <button
+                type="button"
+                class="dgroup"
+                :data-testid="`ncm-group-${g.key}`"
+                @click="toggleGroup(g.key)"
+              >
+                <component
+                  :is="openGroups[g.key] ? ChevronDownIcon : ChevronRightIcon"
+                  class="dgroup-caret"
+                  :size="KUI_ICON_SIZE_20"
+                  decorative
+                />
+                <span class="dgroup-icon"><component :is="groupIcon(g.key)" :size="KUI_ICON_SIZE_20" decorative /></span>
+                <span class="dgroup-label">{{ g.label }}</span>
+                <span class="dgroup-count">{{ g.items.length }}</span>
+                <span v-if="groupAttention(g)" class="dgroup-att">
+                  <WarningIcon :size="KUI_ICON_SIZE_20" decorative />
+                  {{ groupAttention(g) }} need attention
+                </span>
               </button>
 
-              <template v-if="openGroups[g.key]">
-                <div v-for="it in g.items" :key="it.id" class="dt-item-wrap">
+              <div v-if="openGroups[g.key]" class="dtree-children">
+                <div v-for="it in g.items" :key="it.id" class="dtree-node">
                   <button
                     type="button"
-                    class="dt-item"
-                    :class="{ 'dt-selected': selectedId === it.id }"
+                    class="dnode dnode--leaf"
+                    :class="{ 'dnode--selected': selectedId === it.id }"
                     :data-testid="`ncm-tree-${it.id}`"
                     @click="selectedId = it.id"
                   >
-                    <span class="dt-line">└─</span>
-                    <span class="dt-item-name">{{ it.name }}</span>
-                    <span class="dt-tag" :class="`dt-tag--${it.tone}`">{{ it.statusLabel }}</span>
+                    <span class="dnode-dot" :class="`dnode-dot--${it.tone}`" />
+                    <span class="dnode-leaf-name">{{ it.name }}</span>
+                    <KBadge :appearance="toneAppearance(it.tone)">{{ it.statusLabel }}</KBadge>
                   </button>
-                  <div v-if="it.sub" class="dt-sub">
-                    <span class="dt-line dt-line--deep">└─</span>
-                    <span class="dt-sub-text" :class="`dt-status--${it.sub.tone}`">{{ it.sub.text }}</span>
+                  <div v-if="it.sub" class="dnode-dep" :class="`dnode-dep--${it.sub.tone}`">
+                    <ArrowRightIcon class="dnode-dep-arrow" :size="KUI_ICON_SIZE_20" decorative />
+                    <span>{{ it.sub.text }}</span>
                   </div>
                 </div>
-              </template>
-            </template>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -176,8 +199,17 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { KBadge, KButton } from '@kong/kongponents'
-import { ArrowRightIcon } from '@kong/icons'
-import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
+import {
+  ArrowRightIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  NetworkIcon,
+  ConnectionsIcon,
+  WorldPrivateIcon,
+  RuntimeDedicatedCloudIcon,
+  WarningIcon,
+} from '@kong/icons'
+import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
 import type { Network, Connection, Gateway, DnsConfig } from '@/types'
 import type { ServicePath } from '@/composables/useNetworksStore'
 import {
@@ -278,6 +310,13 @@ const openGroups = ref<Record<string, boolean>>({
   'conn-client-to-kong': true, 'conn-kong-to-upstream': true, 'conn-bidirectional': true,
 })
 const toggleGroup = (k: string) => { openGroups.value[k] = !openGroups.value[k] }
+
+// Category icon per branch (directional connectivity keys start with "conn-").
+const groupIcon = (key: string) => {
+  if (key === 'gateways') return RuntimeDedicatedCloudIcon
+  if (key === 'dns') return WorldPrivateIcon
+  return ConnectionsIcon
+}
 
 const allGroups = computed<TreeGroup[]>(() => {
   const gateways: TreeItem[] = props.gateways.map(g => ({
@@ -473,111 +512,219 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 
 .ncm-scroll { overflow-x: auto; }
 
-// ── Dependency tree ────────────────────────────────────────────────────────────
-.dtree {
+// ── Dependency diagram ──────────────────────────────────────────────────────────
+.dgraph {
+  display: flex;
+  flex-direction: column;
+}
+
+// Root node — the network. Prominent card the rest of the graph hangs from.
+.dnode {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.dnode--root {
+  align-items: center;
+  background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  gap: $kui-space-50;
+  padding: $kui-space-50 $kui-space-60;
+  transition: border-color 0.12s ease-in, box-shadow 0.12s ease-in;
+
+  &:hover { border-color: $kui-color-border-primary-weak; }
+  &.dnode--selected {
+    border-color: $kui-color-border-primary;
+    box-shadow: 0 0 0 $kui-border-width-10 $kui-color-border-primary;
+  }
 }
 
-.dt-root {
+.dnode-icon--root {
   align-items: center;
   background-color: $kui-color-background-primary-weakest;
-  border: none;
-  border-bottom: $kui-border-width-10 solid $kui-color-border;
-  cursor: pointer;
+  border-radius: $kui-border-radius-30;
+  color: $kui-color-text-primary;
   display: flex;
-  gap: $kui-space-40;
-  padding: $kui-space-50 $kui-space-60;
-  text-align: left;
-  width: 100%;
-
-  &.dt-selected { box-shadow: inset $kui-space-20 0 0 0 $kui-color-border-primary; }
+  flex: 0 0 auto;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
 }
 
-.dt-root-kicker {
+.dnode-body { display: flex; flex-direction: column; gap: $kui-space-20; margin-right: auto; min-width: 0; }
+.dnode-kicker {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-10;
   font-weight: $kui-font-weight-semibold;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.dt-root-name { color: $kui-color-text; font-size: $kui-font-size-40; font-weight: $kui-font-weight-bold; }
-.dt-root-meta { color: $kui-color-text-neutral; font-size: $kui-font-size-20; margin-right: auto; }
+.dnode-name { color: $kui-color-text; font-size: $kui-font-size-40; font-weight: $kui-font-weight-bold; }
+.dnode-meta { display: flex; flex-wrap: wrap; gap: $kui-space-30; margin-top: $kui-space-10; }
+.dmeta-chip {
+  background-color: $kui-color-background-neutral-weakest;
+  border-radius: $kui-border-radius-20;
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  padding: $kui-space-10 $kui-space-30;
+}
 
-.dt-caret { color: $kui-color-text-neutral; flex: 0 0 auto; font-size: $kui-font-size-20; width: 12px; }
+// Tree of branches hanging off the root. Connectors are a continuous vertical
+// guide (container-level) plus a horizontal tick anchored to each row's OWN
+// centre (top: 50% on the row element). Because the tick lives on the row, it
+// stays centred no matter how tall the row gets or whether text wraps.
+.dtree {
+  display: flex;
+  flex-direction: column;
+  margin-left: calc(#{$kui-space-60} + 18px);
+  padding-left: $kui-space-80;
+  position: relative;
 
-.dt-branch { display: flex; flex-direction: column; padding: $kui-space-40 $kui-space-0; }
+  // Level-1 guide: the network's spine.
+  &::before {
+    border-left: $kui-border-width-10 solid $kui-color-border;
+    bottom: $kui-space-70;
+    content: '';
+    left: $kui-space-20;
+    position: absolute;
+    top: 0;
+  }
+}
 
-.dt-group {
+.dtree-branch { position: relative; }
+
+.dgroup {
   align-items: center;
   background: none;
   border: none;
+  border-radius: $kui-border-radius-30;
   cursor: pointer;
   display: flex;
-  gap: $kui-space-40;
-  padding: $kui-space-40 $kui-space-60;
+  font-family: inherit;
+  gap: $kui-space-30;
+  padding: $kui-space-40 $kui-space-30;
+  position: relative;
   text-align: left;
   width: 100%;
 
   &:hover { background-color: $kui-color-background-neutral-weakest; }
+
+  // Tick from the level-1 guide into this group's centre.
+  &::before {
+    border-top: $kui-border-width-10 solid $kui-color-border;
+    content: '';
+    left: calc(-1 * (#{$kui-space-80} - #{$kui-space-20}));
+    position: absolute;
+    top: 50%;
+    width: calc(#{$kui-space-80} - #{$kui-space-20} - #{$kui-space-30});
+  }
 }
-.dt-group-label { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; }
-.dt-count {
+
+.dgroup-caret { color: $kui-color-text-neutral; flex: 0 0 auto; }
+.dgroup-icon { align-items: center; color: $kui-color-text-neutral; display: flex; flex: 0 0 auto; }
+.dgroup-label { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; }
+.dgroup-count {
+  align-items: center;
   background-color: $kui-color-background-neutral-weak;
   border-radius: $kui-border-radius-round;
   color: $kui-color-text-neutral;
-  font-size: $kui-font-size-10;
-  padding: 0 $kui-space-30;
-}
-.dt-att { color: $kui-color-text-warning; font-size: $kui-font-size-20; font-weight: $kui-font-weight-semibold; }
-
-.dt-item-wrap { display: flex; flex-direction: column; }
-
-.dt-item {
-  align-items: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  gap: $kui-space-40;
-  padding: $kui-space-30 $kui-space-60 $kui-space-30 $kui-space-90;
-  text-align: left;
-  width: 100%;
-
-  &:hover { background-color: $kui-color-background-neutral-weakest; }
-  &.dt-selected { background-color: $kui-color-background-primary-weakest; box-shadow: inset $kui-space-20 0 0 0 $kui-color-border-primary; }
-}
-.dt-line { color: $kui-color-text-neutral-weak; font-family: $kui-font-family-code; flex: 0 0 auto; }
-.dt-line--deep { padding-left: $kui-space-70; }
-.dt-item-name { color: $kui-color-text; font-size: $kui-font-size-30; overflow-wrap: anywhere; }
-
-.dt-tag {
-  border-radius: $kui-border-radius-20;
+  display: inline-flex;
   font-size: $kui-font-size-10;
   font-weight: $kui-font-weight-semibold;
-  margin-left: auto;
-  padding: $kui-space-10 $kui-space-30;
-
-  &--ready { background-color: $kui-color-background-success-weakest; color: $kui-color-text-success; }
-  &--pending { background-color: $kui-color-background-warning-weakest; color: $kui-color-text-warning; }
-  &--error { background-color: $kui-color-background-danger-weakest; color: $kui-color-text-danger; }
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 $kui-space-20;
+}
+.dgroup-att {
+  align-items: center;
+  color: $kui-color-text-warning;
+  display: inline-flex;
+  font-size: $kui-font-size-20;
+  font-weight: $kui-font-weight-semibold;
+  gap: $kui-space-20;
+  margin-left: $kui-space-30;
 }
 
-.dt-sub {
+// Leaf nodes within a branch. Same continuous-guide + per-row-tick model.
+.dtree-children {
+  display: flex;
+  flex-direction: column;
+  gap: $kui-space-40;
+  padding: $kui-space-40 $kui-space-0 $kui-space-50 $kui-space-80;
+  position: relative;
+
+  // Level-2 guide, indented under the group's tick.
+  &::before {
+    border-left: $kui-border-width-10 solid $kui-color-border;
+    bottom: $kui-space-60;
+    content: '';
+    left: $kui-space-50;
+    position: absolute;
+    top: calc(-1 * #{$kui-space-40});
+  }
+}
+
+.dtree-node { position: relative; }
+
+.dnode--leaf {
+  align-items: center;
+  background-color: $kui-color-background;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-30;
+  display: flex;
+  gap: $kui-space-40;
+  padding: $kui-space-40 $kui-space-50;
+  position: relative;
+  transition: border-color 0.12s ease-in, box-shadow 0.12s ease-in;
+
+  // Tick from the level-2 guide into this leaf's centre.
+  &::before {
+    border-top: $kui-border-width-10 solid $kui-color-border;
+    content: '';
+    left: calc(-1 * (#{$kui-space-80} - #{$kui-space-50}));
+    position: absolute;
+    top: 50%;
+    width: calc(#{$kui-space-80} - #{$kui-space-50});
+  }
+
+  &:hover { border-color: $kui-color-border-primary-weak; }
+  &.dnode--selected {
+    border-color: $kui-color-border-primary;
+    box-shadow: 0 0 0 $kui-border-width-10 $kui-color-border-primary;
+  }
+}
+
+.dnode-dot {
+  border-radius: $kui-border-radius-circle;
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+
+  &--ready { background-color: $kui-color-text-success; }
+  &--pending { background-color: $kui-color-text-warning; }
+  &--error { background-color: $kui-color-text-danger; }
+}
+.dnode-leaf-name { color: $kui-color-text; font-size: $kui-font-size-30; margin-right: auto; overflow-wrap: anywhere; }
+
+.dnode-dep {
   align-items: center;
   color: $kui-color-text-neutral;
   display: flex;
-  gap: $kui-space-40;
-  padding: $kui-space-20 $kui-space-60 $kui-space-30 $kui-space-90;
-}
-.dt-sub-text { font-size: $kui-font-size-20; }
+  font-size: $kui-font-size-20;
+  gap: $kui-space-20;
+  padding: $kui-space-20 $kui-space-0 $kui-space-0 $kui-space-60;
 
-.dt-status--ready { color: $kui-color-text-success; }
-.dt-status--pending { color: $kui-color-text-warning; }
-.dt-status--error { color: $kui-color-text-danger; }
+  &--pending { color: $kui-color-text-warning; }
+  &--error { color: $kui-color-text-danger; }
+}
+.dnode-dep-arrow { flex: 0 0 auto; }
 
 .ncm-dot {
   border-radius: $kui-border-radius-circle;
