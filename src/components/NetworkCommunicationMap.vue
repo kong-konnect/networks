@@ -3,25 +3,23 @@
     <!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
     <div class="ncm-toolbar">
       <p v-if="mode === 'map'" class="ncm-caption">
-        <template v-if="problemNodes.length">
-          {{ problemNodes.length }} relationship{{ problemNodes.length === 1 ? '' : 's' }} need{{ problemNodes.length === 1 ? 's' : '' }} attention.
+        <template v-if="problemCount">
+          {{ problemCount }} relationship{{ problemCount === 1 ? '' : 's' }} need{{ problemCount === 1 ? 's' : '' }} attention.
         </template>
         <template v-else>Everything is healthy.</template>
-        <span v-if="healthyNodes.length" class="ncm-caption-dim">
-          {{ healthyNodes.length }} healthy relationship{{ healthyNodes.length === 1 ? '' : 's' }} hidden.
-        </span>
+        <span class="ncm-caption-dim">Drag to pan · scroll with {{ modKeyLabel }} to zoom · select a node for details.</span>
       </p>
       <p v-else class="ncm-caption">Follow one service's path end to end to see where it breaks.</p>
 
       <div class="ncm-toolbar-actions">
         <KButton
-          v-if="mode === 'map' && healthyNodes.length"
+          v-if="mode === 'map' && healthyCount"
           appearance="tertiary"
           size="small"
-          data-testid="ncm-show-all"
-          @click="showAll = !showAll"
+          data-testid="ncm-focus-problems"
+          @click="focusProblems = !focusProblems"
         >
-          {{ showAll ? 'Show problems only' : `Show all (${healthyNodes.length})` }}
+          {{ focusProblems ? 'Show all' : 'Focus problems' }}
         </KButton>
         <KButton
           v-if="mode === 'map' && services.length"
@@ -45,106 +43,84 @@
       </div>
     </div>
 
-    <!-- ── MAP MODE: dependency diagram ────────────────────────────────────── -->
+    <!-- ── MAP MODE: pannable topology canvas ──────────────────────────────── -->
     <template v-if="mode === 'map'">
-      <div class="ncm-body">
-        <div class="dgraph" data-testid="ncm-tree">
-          <!-- Root node: the network. Everything below depends on it. -->
-          <button
-            type="button"
-            class="dnode dnode--root"
-            :class="{ 'dnode--selected': selectedId === null }"
-            data-testid="ncm-network"
-            @click="selectedId = null"
-          >
-            <span class="dnode-icon dnode-icon--root">
-              <NetworkIcon :size="KUI_ICON_SIZE_30" decorative />
-            </span>
-            <span class="dnode-body">
-              <span class="dnode-kicker">Network</span>
-              <span class="dnode-name">{{ network.name }}</span>
-              <span class="dnode-meta">
-                <span class="dmeta-chip">{{ network.cloud.toUpperCase() }}</span>
-                <span class="dmeta-chip">{{ network.regions[0].region }}</span>
-                <span class="dmeta-chip">{{ network.regions[0].cidr }}</span>
-              </span>
-            </span>
-            <KBadge :appearance="netStatusAppearance">{{ netStatusLabel }}</KBadge>
-          </button>
-
-          <!-- Branches: each resource group hangs off the network with a connector. -->
-          <div class="dtree">
-            <div v-for="g in visibleGroups" :key="g.key" class="dtree-branch">
-              <button
-                type="button"
-                class="dgroup"
-                :data-testid="`ncm-group-${g.key}`"
-                @click="toggleGroup(g.key)"
-              >
-                <component
-                  :is="openGroups[g.key] ? ChevronDownIcon : ChevronRightIcon"
-                  class="dgroup-caret"
-                  :size="KUI_ICON_SIZE_20"
-                  decorative
-                />
-                <span class="dgroup-icon"><component :is="groupIcon(g.key)" :size="KUI_ICON_SIZE_20" decorative /></span>
-                <span class="dgroup-label">{{ g.label }}</span>
-                <span class="dgroup-count">{{ g.items.length }}</span>
-                <span v-if="groupAttention(g)" class="dgroup-att">
-                  <WarningIcon :size="KUI_ICON_SIZE_20" decorative />
-                  {{ groupAttention(g) }} need attention
-                </span>
-              </button>
-
-              <div v-if="openGroups[g.key]" class="dtree-children">
-                <div v-for="it in g.items" :key="it.id" class="dtree-node">
-                  <button
-                    type="button"
-                    class="dnode dnode--leaf"
-                    :class="{ 'dnode--selected': selectedId === it.id }"
-                    :data-testid="`ncm-tree-${it.id}`"
-                    @click="selectedId = it.id"
-                  >
-                    <span class="dnode-dot" :class="`dnode-dot--${it.tone}`" />
-                    <span class="dnode-leaf-name">{{ it.name }}</span>
-                    <KBadge :appearance="toneAppearance(it.tone)">{{ it.statusLabel }}</KBadge>
-                  </button>
-                  <div v-if="it.sub" class="dnode-dep" :class="`dnode-dep--${it.sub.tone}`">
-                    <ArrowRightIcon class="dnode-dep-arrow" :size="KUI_ICON_SIZE_20" decorative />
-                    <span>{{ it.sub.text }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div
+        ref="viewportEl"
+        class="flowcanvas"
+        :class="{ 'flowcanvas--grabbing': dragging }"
+        data-testid="ncm-canvas"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
+        @wheel="onWheel"
+      >
+        <div class="flow-controls" @pointerdown.stop>
+          <KButton appearance="secondary" size="small" data-testid="ncm-zoom-in" aria-label="Zoom in" @click="zoomButton(1.2)">
+            <AddIcon :size="KUI_ICON_SIZE_20" decorative />
+          </KButton>
+          <KButton appearance="secondary" size="small" data-testid="ncm-zoom-out" aria-label="Zoom out" @click="zoomButton(1 / 1.2)">
+            <RemoveIcon :size="KUI_ICON_SIZE_20" decorative />
+          </KButton>
+          <KButton appearance="secondary" size="small" data-testid="ncm-zoom-fit" @click="fit">
+            Fit
+          </KButton>
         </div>
 
-        <!-- Detail panel for the selected entity -->
-        <aside class="ncm-detail" data-testid="ncm-detail">
-          <div class="ncm-detail-head">
-            <span class="ncm-detail-kicker">{{ selected ? selected.categoryLabel : 'Network' }}</span>
-            <h3 class="ncm-detail-title">{{ selected ? selected.name : network.name }}</h3>
-            <KBadge :appearance="selected ? toneAppearance(selected.tone) : netStatusAppearance">
-              {{ selected ? selected.statusLabel : netStatusLabel }}
-            </KBadge>
-          </div>
-          <dl class="ncm-detail-facts">
-            <template v-for="f in detailFacts" :key="f.label">
-              <dt>{{ f.label }}</dt>
-              <dd>{{ f.value }}</dd>
-            </template>
-          </dl>
-          <div v-if="detailAction" class="ncm-detail-action" :class="`ncm-detail-action--${detailActionTone}`">
-            <span class="ncm-detail-action-label">Recommended action</span>
-            <p class="ncm-detail-action-text">{{ detailAction }}</p>
-          </div>
-        </aside>
+        <div class="flow-stage" :style="stageStyle">
+          <svg class="flow-edges" :width="layout.width" :height="layout.height" :viewBox="`0 0 ${layout.width} ${layout.height}`">
+            <defs>
+              <marker v-for="t in tones" :id="`arrow-${t}`" :key="t" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" :class="`edge-arrow edge-arrow--${t}`" />
+              </marker>
+            </defs>
+            <path
+              v-for="e in layout.edges"
+              :key="e.id"
+              :d="e.d"
+              class="flow-edge"
+              :class="[`flow-edge--${e.tone}`, { 'flow-edge--dim': isDim(e.tone) }]"
+              :marker-end="`url(#arrow-${e.tone})`"
+            />
+          </svg>
+
+          <button
+            v-for="n in layout.nodes"
+            :key="n.id"
+            type="button"
+            class="fnode"
+            :class="[
+              `fnode--${n.kind}`,
+              { 'fnode--selected': selectedId === n.id, 'fnode--dim': isDim(n.tone) },
+            ]"
+            :style="nodeStyle(n)"
+            :data-testid="`ncm-node-${n.id}`"
+            @click="onNodeClick(n)"
+          >
+            <span class="fnode-ic" :class="`fnode-ic--${n.kind}`">
+              <component :is="kindIcon(n.kind)" :size="KUI_ICON_SIZE_20" decorative />
+            </span>
+            <span class="fnode-text">
+              <span class="fnode-kicker">
+                {{ kindLabel(n.kind) }}
+                <span v-if="props.directional && n.dir" class="fnode-dir">· {{ directionCategoryLabel[n.dir] }}</span>
+              </span>
+              <span class="fnode-name">{{ n.name }}</span>
+              <span class="fnode-sub">{{ n.sub }}</span>
+            </span>
+            <span class="fnode-status">
+              <span class="fnode-dot" :class="`fnode-dot--${n.tone}`" />
+            </span>
+          </button>
+        </div>
       </div>
 
       <div class="ncm-legendbar">
         <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--ready" />Healthy</span>
         <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--pending" />Pending / needs action</span>
         <span class="ncm-legend-item"><span class="ncm-dot ncm-dot--error" />Error</span>
+        <span class="ncm-legend-flow">Traffic flows left to right.</span>
       </div>
     </template>
 
@@ -193,23 +169,51 @@
       </div>
       <p v-else class="ncm-trace-empty">Pick a service above to trace its path through the network.</p>
     </template>
+
+    <!-- ── Detail slideout for the selected node ───────────────────────────── -->
+    <KSlideout
+      :visible="detailOpen"
+      :has-overlay="false"
+      :close-on-blur="false"
+      :title="selectedNode ? selectedNode.name : ''"
+      max-width="380px"
+      data-testid="ncm-detail"
+      @close="selectedId = null"
+    >
+      <div v-if="selectedNode" class="ncm-detail">
+        <div class="ncm-detail-head">
+          <span class="ncm-detail-kicker">{{ kindLabel(selectedNode.kind) }}</span>
+          <KBadge :appearance="toneAppearance(selectedNode.tone)">{{ selectedNode.statusLabel }}</KBadge>
+        </div>
+        <dl class="ncm-detail-facts">
+          <template v-for="f in nodeFacts(selectedNode)" :key="f.label">
+            <dt>{{ f.label }}</dt>
+            <dd>{{ f.value }}</dd>
+          </template>
+        </dl>
+        <div v-if="nodeAction(selectedNode)" class="ncm-detail-action" :class="`ncm-detail-action--${selectedNode.tone}`">
+          <span class="ncm-detail-action-label">Recommended action</span>
+          <p class="ncm-detail-action-text">{{ nodeAction(selectedNode) }}</p>
+        </div>
+      </div>
+    </KSlideout>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { KBadge, KButton } from '@kong/kongponents'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { KBadge, KButton, KSlideout } from '@kong/kongponents'
 import {
   ArrowRightIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
+  AddIcon,
+  RemoveIcon,
   NetworkIcon,
   ConnectionsIcon,
   WorldPrivateIcon,
   RuntimeDedicatedCloudIcon,
-  WarningIcon,
+  LocationIcon,
 } from '@kong/icons'
-import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
+import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import type { Network, Connection, Gateway, DnsConfig } from '@/types'
 import type { ServicePath } from '@/composables/useNetworksStore'
 import {
@@ -227,8 +231,8 @@ const props = withDefaults(defineProps<{
   gateways?: Gateway[]
   dnsConfigs?: DnsConfig[]
   services?: ServicePath[]
-  // Prototype-only "by direction" variant: split the connectivity branch into
-  // Client → Kong / Kong → upstream / Bidirectional sub-branches.
+  // Prototype-only "by direction" variant: tag connectivity nodes with their
+  // traffic direction (Client → Kong / Kong → upstream / Bidirectional).
   directional?: boolean
 }>(), {
   gateways: () => [],
@@ -238,19 +242,11 @@ const props = withDefaults(defineProps<{
 })
 
 type Tone = 'ready' | 'pending' | 'error'
-type Category = 'gateway' | 'connectivity' | 'dns'
-interface ErdNode {
-  id: string
-  category: Category
-  categoryLabel: string
-  name: string
-  sub: string
-  tone: Tone
-  statusLabel: string
-}
+type Kind = 'gateway' | 'network' | 'connectivity' | 'dns' | 'target'
 
+const tones: Tone[] = ['ready', 'pending', 'error']
 const mode = ref<'map' | 'trace'>('map')
-const showAll = ref(false)
+const focusProblems = ref(false)
 const selectedId = ref<string | null>(null)
 
 const connTone = (status: Connection['status']): Tone =>
@@ -259,127 +255,155 @@ const dnsTone = (status: DnsConfig['status']): Tone =>
   status === 'error' ? 'error' : status === 'pending' ? 'pending' : 'ready'
 const dnsTypeLabel = (t: DnsConfig['type']) => t === 'outbound-resolver' ? 'Outbound resolver' : 'Private hosted zone'
 const dnsStatusLabel = (s: DnsConfig['status']) => s === 'error' ? 'Not resolving' : s === 'pending' ? 'Pending' : 'Resolving'
-
-// Entities related to the network, across the three categories.
-const allNodes = computed<ErdNode[]>(() => {
-  const conns = props.connections.map(c => ({
-    id: `conn-${c.id}`, category: 'connectivity' as const, categoryLabel: 'Connectivity',
-    name: c.name, sub: connectionTypeLabel(c.type), tone: connTone(c.status), statusLabel: connStatusLabel(c.status),
-  }))
-  const dns = props.dnsConfigs.map(d => ({
-    id: `dns-${d.id}`, category: 'dns' as const, categoryLabel: 'Private DNS',
-    name: d.name, sub: dnsTypeLabel(d.type), tone: dnsTone(d.status), statusLabel: dnsStatusLabel(d.status),
-  }))
-  const gw = props.gateways.map(g => ({
-    id: `gw-${g.id}`, category: 'gateway' as const, categoryLabel: 'Gateway',
-    name: g.name, sub: 'Dedicated Cloud Gateway', tone: 'ready' as Tone, statusLabel: 'Ready',
-  }))
-  return [...conns, ...dns, ...gw]
-})
-
-const problemNodes = computed(() => allNodes.value.filter(n => n.tone !== 'ready'))
-const healthyNodes = computed(() => allNodes.value.filter(n => n.tone === 'ready'))
-
-// ── Dependency tree ───────────────────────────────────────────────────────────
-// Network contains its resources; a DNS record expands into the connection it
-// resolves through and the target it reaches — the dependency between resources.
 const targetToneOf = (s: 'reachable' | 'unreachable' | 'pending'): Tone =>
   s === 'reachable' ? 'ready' : s === 'unreachable' ? 'error' : 'pending'
-const connById = (id: string) => props.connections.find(c => c.id === id)
-
-interface TreeItem {
-  id: string
-  name: string
-  statusLabel: string
-  tone: Tone
-  sub?: { text: string; tone: Tone }
-}
-interface TreeGroup { key: string; label: string; items: TreeItem[] }
-
-// One connectivity connection → a tree item (with its "reaches {target}" sub-line).
-const connectivityItemFor = (c: Connection): TreeItem => {
-  const svc = props.services.find(s => s.connectionId === c.id)
-  return {
-    id: `conn-${c.id}`, name: c.name, statusLabel: connStatusLabel(c.status), tone: connTone(c.status),
-    sub: svc ? { text: `reaches ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
-  }
-}
-
-const openGroups = ref<Record<string, boolean>>({
-  gateways: true, connectivity: true, dns: true,
-  'conn-client-to-kong': true, 'conn-kong-to-upstream': true, 'conn-bidirectional': true,
-})
-const toggleGroup = (k: string) => { openGroups.value[k] = !openGroups.value[k] }
-
-// Category icon per branch (directional connectivity keys start with "conn-").
-const groupIcon = (key: string) => {
-  if (key === 'gateways') return RuntimeDedicatedCloudIcon
-  if (key === 'dns') return WorldPrivateIcon
-  return ConnectionsIcon
-}
-
-const allGroups = computed<TreeGroup[]>(() => {
-  const gateways: TreeItem[] = props.gateways.map(g => ({
-    id: `gw-${g.id}`, name: g.name, statusLabel: 'Ready', tone: 'ready',
-  }))
-  const connectivity: TreeItem[] = props.connections.map(connectivityItemFor)
-  const dns: TreeItem[] = props.dnsConfigs.map(d => {
-    const svc = props.services.find(s => s.dnsConfigId === d.id)
-    const conn = svc ? connById(svc.connectionId) : undefined
-    return {
-      id: `dns-${d.id}`, name: d.name, statusLabel: dnsStatusLabel(d.status), tone: dnsTone(d.status),
-      sub: svc && conn ? { text: `via ${conn.name} → ${svc.target.name}`, tone: targetToneOf(svc.target.status) } : undefined,
-    }
-  })
-
-  // Directional variant: split the single connectivity branch into per-direction
-  // sub-branches (empty directions are dropped). Peering is bidirectional; resource
-  // endpoints are one-way, so the tree makes the flow explicit.
-  const connectivityGroups: TreeGroup[] = props.directional
-    ? (['client-to-kong', 'kong-to-upstream', 'bidirectional'] as DirectionCategory[])
-        .map(cat => ({
-          key: `conn-${cat}`,
-          label: `Private connectivity · ${directionCategoryLabel[cat]}`,
-          items: props.connections
-            .filter(c => directionCategory(c) === cat)
-            .map(c => connectivityItemFor(c)),
-        }))
-        .filter(g => g.items.length > 0)
-    : [{ key: 'connectivity', label: 'Private connectivity', items: connectivity }]
-
-  return [
-    { key: 'gateways', label: 'Gateways', items: gateways },
-    ...connectivityGroups,
-    { key: 'dns', label: 'Private DNS', items: dns },
-  ]
-})
-
-// Problems-first: an item shows when itself or its dependency isn't healthy.
-const itemNeedsAttention = (it: TreeItem) => it.tone !== 'ready' || (!!it.sub && it.sub.tone !== 'ready')
-const visibleGroups = computed<TreeGroup[]>(() =>
-  allGroups.value
-    .map(g => ({ ...g, items: showAll.value ? g.items : g.items.filter(itemNeedsAttention) }))
-    .filter(g => g.items.length > 0),
-)
-const groupAttention = (g: TreeGroup) => g.items.filter(itemNeedsAttention).length
-
-const selected = computed(() => allNodes.value.find(n => n.id === selectedId.value) || null)
+const targetStatusLabel = (s: 'reachable' | 'unreachable' | 'pending') =>
+  s === 'reachable' ? 'Reachable' : s === 'unreachable' ? 'Unreachable' : 'Pending'
+const worstTone = (tones: Tone[]): Tone =>
+  tones.includes('error') ? 'error' : tones.includes('pending') ? 'pending' : 'ready'
 
 // ── Network status ────────────────────────────────────────────────────────────
+const netTone = computed<Tone>(() =>
+  props.network.status === 'ready' ? 'ready' : props.network.status === 'error' ? 'error' : 'pending')
 const netStatusLabel = computed(() =>
   props.network.status === 'ready' ? 'Ready'
     : props.network.status === 'initialising' ? 'Initializing'
-      : props.network.status === 'error' ? 'Error' : props.network.status,
-)
+      : props.network.status === 'error' ? 'Error' : props.network.status)
 const netStatusAppearance = computed(() =>
-  props.network.status === 'ready' ? 'success' : props.network.status === 'error' ? 'danger' : 'warning',
-)
+  props.network.status === 'ready' ? 'success' : props.network.status === 'error' ? 'danger' : 'warning')
 const toneAppearance = (tone: Tone) => tone === 'ready' ? 'success' : tone === 'error' ? 'danger' : 'warning'
 
-// ── Detail panel content ──────────────────────────────────────────────────────
-const detailFacts = computed<{ label: string; value: string }[]>(() => {
-  if (!selected.value) {
-    const problems = problemNodes.value.length
+// ── Layout (deterministic left→right topology) ─────────────────────────────────
+interface FNode {
+  id: string
+  kind: Kind
+  name: string
+  sub: string
+  tone: Tone
+  statusLabel: string
+  dir?: DirectionCategory
+  x: number
+  y: number
+  w: number
+  h: number
+}
+interface FEdge { id: string; d: string; tone: Tone }
+
+const NODE_W = 216
+const NODE_H = 76
+const COL_GAP = 92
+const ROW_GAP = 18
+const PAD = 36
+
+const layout = computed<{ nodes: FNode[]; edges: FEdge[]; width: number; height: number }>(() => {
+  // Build each tier's node list (without positions yet).
+  const gwNodes: FNode[] = props.gateways.map(g => mk(`gw-${g.id}`, 'gateway', g.name, 'Dedicated Cloud Gateway', 'ready', 'Ready'))
+  const hub: FNode = mk('network', 'network', props.network.name, `${props.network.cloud.toUpperCase()} · ${props.network.regions[0].region}`, netTone.value, netStatusLabel.value)
+  const connNodes: FNode[] = props.connections.map(c => {
+    const n = mk(`conn-${c.id}`, 'connectivity', c.name, connectionTypeLabel(c.type), connTone(c.status), connStatusLabel(c.status))
+    n.dir = directionCategory(c)
+    return n
+  })
+  const dnsNodes: FNode[] = props.dnsConfigs.map(d =>
+    mk(`dns-${d.id}`, 'dns', d.name, dnsTypeLabel(d.type), dnsTone(d.status), dnsStatusLabel(d.status)))
+
+  // Targets: unique by name, worst tone across the services reaching them.
+  const targetMap = new Map<string, { node: FNode; conns: Set<string> }>()
+  for (const s of props.services) {
+    const key = s.target.name
+    const tone = targetToneOf(s.target.status)
+    if (!targetMap.has(key)) {
+      targetMap.set(key, {
+        node: mk(`target-${key}`, 'target', s.target.name, s.target.address, tone, targetStatusLabel(s.target.status)),
+        conns: new Set(),
+      })
+    }
+    const entry = targetMap.get(key)!
+    entry.node.tone = worstTone([entry.node.tone, tone])
+    entry.node.statusLabel = targetStatusLabel(s.target.status)
+    entry.conns.add(s.connectionId)
+  }
+  const targetNodes = [...targetMap.values()].map(t => t.node)
+
+  // Tiers, empty ones dropped (hub always present).
+  const rawTiers: FNode[][] = [gwNodes, [hub], [...connNodes, ...dnsNodes], targetNodes]
+  const tiers = rawTiers.filter(t => t.length > 0)
+
+  const tierHeight = (t: FNode[]) => t.reduce((sum, n) => sum + n.h, 0) + Math.max(0, t.length - 1) * ROW_GAP
+  const height = Math.max(...tiers.map(tierHeight)) + PAD * 2
+  const width = PAD * 2 + tiers.length * NODE_W + (tiers.length - 1) * COL_GAP
+
+  tiers.forEach((t, ti) => {
+    const x = PAD + ti * (NODE_W + COL_GAP)
+    let y = (height - tierHeight(t)) / 2
+    for (const n of t) {
+      n.x = x
+      n.y = y
+      y += n.h + ROW_GAP
+    }
+  })
+
+  const byId = new Map(tiers.flat().map(n => [n.id, n]))
+  const edge = (from: FNode, to: FNode): FEdge => {
+    const x1 = from.x + from.w
+    const y1 = from.y + from.h / 2
+    const x2 = to.x
+    const y2 = to.y + to.h / 2
+    const mx = (x1 + x2) / 2
+    return { id: `${from.id}->${to.id}`, tone: to.tone, d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}` }
+  }
+
+  const edges: FEdge[] = []
+  for (const g of gwNodes) edges.push(edge(g, hub))
+  for (const c of connNodes) edges.push(edge(hub, c))
+  for (const d of dnsNodes) edges.push(edge(hub, d))
+  for (const t of targetMap.values()) {
+    for (const connId of t.conns) {
+      const cn = byId.get(`conn-${connId}`)
+      if (cn) edges.push(edge(cn, t.node))
+    }
+  }
+
+  return { nodes: tiers.flat(), edges, width, height }
+})
+
+function mk(id: string, kind: Kind, name: string, sub: string, tone: Tone, statusLabel: string): FNode {
+  return { id, kind, name, sub, tone, statusLabel, x: 0, y: 0, w: NODE_W, h: NODE_H }
+}
+
+const flowResourceNodes = computed(() => layout.value.nodes.filter(n => n.kind !== 'network'))
+const problemCount = computed(() => flowResourceNodes.value.filter(n => n.tone !== 'ready').length)
+const healthyCount = computed(() => flowResourceNodes.value.filter(n => n.tone === 'ready').length)
+const isDim = (tone: Tone) => focusProblems.value && tone === 'ready'
+
+// ── Node presentation ───────────────────────────────────────────────────────
+const kindIcon = (kind: Kind) => ({
+  gateway: RuntimeDedicatedCloudIcon,
+  network: NetworkIcon,
+  connectivity: ConnectionsIcon,
+  dns: WorldPrivateIcon,
+  target: LocationIcon,
+}[kind])
+const kindLabel = (kind: Kind) => ({
+  gateway: 'Gateway',
+  network: 'Network',
+  connectivity: 'Connectivity',
+  dns: 'Private DNS',
+  target: 'Private target',
+}[kind])
+const nodeStyle = (n: FNode) => ({ left: `${n.x}px`, top: `${n.y}px`, width: `${n.w}px`, height: `${n.h}px` })
+
+// ── Selection + detail slideout ───────────────────────────────────────────────
+const selectedNode = computed(() => layout.value.nodes.find(n => n.id === selectedId.value) || null)
+const detailOpen = computed(() => selectedNode.value !== null)
+const wasPanned = ref(false)
+const onNodeClick = (n: FNode) => {
+  if (wasPanned.value) return
+  selectedId.value = selectedId.value === n.id ? null : n.id
+}
+
+const nodeFacts = (n: FNode): { label: string; value: string }[] => {
+  if (n.kind === 'network') {
     return [
       { label: 'Provider', value: props.network.cloud.toUpperCase() },
       { label: 'Region', value: props.network.regions[0].region },
@@ -388,55 +412,120 @@ const detailFacts = computed<{ label: string; value: string }[]>(() => {
       { label: 'Used by', value: `${props.gateways.length} gateway${props.gateways.length === 1 ? '' : 's'}` },
       { label: 'Connectivity', value: `${props.connections.length} resource${props.connections.length === 1 ? '' : 's'}` },
       { label: 'Private DNS', value: `${props.dnsConfigs.length} configuration${props.dnsConfigs.length === 1 ? '' : 's'}` },
-      { label: 'Needs attention', value: problems ? `${problems} relationship${problems === 1 ? '' : 's'}` : 'None' },
     ]
   }
-  const n = selected.value
-  const facts = [{ label: 'Type', value: n.sub }, { label: 'Status', value: n.statusLabel }]
-  if (n.category === 'connectivity') {
+  const facts: { label: string; value: string }[] = [{ label: 'Type', value: n.sub }, { label: 'Status', value: n.statusLabel }]
+  if (n.kind === 'connectivity') {
     const c = props.connections.find(x => `conn-${x.id}` === n.id)
+    if (n.dir) facts.push({ label: 'Direction', value: directionCategoryLabel[n.dir] })
     if (c?.peerVpcId) facts.push({ label: 'Customer VPC', value: c.peerVpcId })
     if (c?.setupValues?.ramShareArn) facts.push({ label: 'RAM share', value: c.setupValues.ramShareArn })
   }
-  if (n.category === 'dns') {
+  if (n.kind === 'dns') {
     const d = props.dnsConfigs.find(x => `dns-${x.id}` === n.id)
     if (d?.usedFor) facts.push({ label: 'Used for', value: d.usedFor })
-    // Show the DNS → connection relationship when present.
     if (d?.relatedConnectionId) {
       const rel = props.connections.find(c => c.id === d.relatedConnectionId)
       if (rel) facts.push({ label: 'Resolves via', value: rel.name })
     }
   }
+  if (n.kind === 'target') {
+    const conns = props.services.filter(s => s.target.name === n.name).map(s => props.connections.find(c => c.id === s.connectionId)?.name).filter(Boolean)
+    if (conns.length) facts.push({ label: 'Reached via', value: [...new Set(conns)].join(', ') })
+  }
   return facts
-})
+}
 
-const detailAction = computed<string | null>(() => {
-  if (!selected.value || selected.value.tone === 'ready') return null
-  const n = selected.value
-  if (n.category === 'connectivity') {
+const nodeAction = (n: FNode): string | null => {
+  if (n.tone === 'ready') return null
+  if (n.kind === 'connectivity') {
     const c = props.connections.find(x => `conn-${x.id}` === n.id)
     return c ? nextActionText(c) : null
   }
-  if (n.category === 'dns') {
+  if (n.kind === 'dns') {
     return n.tone === 'error'
       ? 'The resolver is unreachable. Check the outbound resolver configuration and the target it points to.'
       : 'Resolution is still propagating. No action needed unless it stays pending.'
   }
+  if (n.kind === 'target') {
+    return n.tone === 'error'
+      ? 'This target is unreachable. Check the connection that reaches it and the target’s own health.'
+      : 'The path to this target is still coming up. No action needed unless it stays pending.'
+  }
   return null
-})
-const detailActionTone = computed(() => selected.value?.tone ?? 'ready')
+}
+
+// ── Pan + zoom ─────────────────────────────────────────────────────────────
+const viewportEl = ref<HTMLElement | null>(null)
+const pan = ref({ x: 0, y: 0 })
+const zoom = ref(1)
+const dragging = ref(false)
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+const modKeyLabel = isMac ? '⌘' : 'Ctrl'
+const stageStyle = computed(() => ({
+  transform: `translate(${pan.value.x}px, ${pan.value.y}px) scale(${zoom.value})`,
+}))
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+let ptr = { id: -1, x: 0, y: 0, px: 0, py: 0, moved: false }
+
+const onPointerDown = (e: PointerEvent) => {
+  wasPanned.value = false
+  ptr = { id: e.pointerId, x: e.clientX, y: e.clientY, px: pan.value.x, py: pan.value.y, moved: false }
+  dragging.value = true
+}
+const onPointerMove = (e: PointerEvent) => {
+  if (!dragging.value || e.pointerId !== ptr.id) return
+  const dx = e.clientX - ptr.x
+  const dy = e.clientY - ptr.y
+  if (!ptr.moved && Math.hypot(dx, dy) > 4) {
+    ptr.moved = true
+    viewportEl.value?.setPointerCapture?.(ptr.id)
+  }
+  if (ptr.moved) pan.value = { x: ptr.px + dx, y: ptr.py + dy }
+}
+const onPointerUp = () => {
+  wasPanned.value = ptr.moved
+  dragging.value = false
+  if (ptr.id !== -1 && viewportEl.value?.hasPointerCapture?.(ptr.id)) viewportEl.value.releasePointerCapture(ptr.id)
+  ptr.id = -1
+}
+
+const zoomAt = (factor: number, cx: number, cy: number) => {
+  const z = clamp(zoom.value * factor, 0.4, 2)
+  const k = z / zoom.value
+  pan.value = { x: cx - (cx - pan.value.x) * k, y: cy - (cy - pan.value.y) * k }
+  zoom.value = z
+}
+const zoomButton = (factor: number) => {
+  const vp = viewportEl.value
+  zoomAt(factor, (vp?.clientWidth ?? 0) / 2, (vp?.clientHeight ?? 0) / 2)
+}
+const onWheel = (e: WheelEvent) => {
+  if (!(e.ctrlKey || e.metaKey)) return
+  e.preventDefault()
+  const rect = viewportEl.value?.getBoundingClientRect()
+  if (!rect) return
+  zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - rect.left, e.clientY - rect.top)
+}
+
+const fit = () => {
+  const vp = viewportEl.value
+  if (!vp) return
+  const { width, height } = layout.value
+  const z = clamp(Math.min((vp.clientWidth - PAD) / width, (vp.clientHeight - PAD) / height, 1), 0.4, 1)
+  zoom.value = z
+  pan.value = { x: (vp.clientWidth - width * z) / 2, y: (vp.clientHeight - height * z) / 2 }
+}
+
+onMounted(() => nextTick(fit))
+watch(() => [layout.value.width, layout.value.height, mode.value], () => nextTick(fit))
 
 // ── Path trace (separate mode) ────────────────────────────────────────────────
 const tracedId = ref<string | null>(null)
 const tracedService = computed(() => props.services.find(s => s.id === tracedId.value) || null)
-
 const enterTrace = () => { mode.value = 'trace'; tracedId.value = props.services[0]?.id ?? null }
 const exitTrace = () => { mode.value = 'map'; tracedId.value = null }
-
-const targetTone = (s: ServicePath['target']['status']): Tone =>
-  s === 'reachable' ? 'ready' : s === 'unreachable' ? 'error' : 'pending'
-const worstTone = (tones: Tone[]): Tone =>
-  tones.includes('error') ? 'error' : tones.includes('pending') ? 'pending' : 'ready'
 
 const servicePathTone = (s: ServicePath): Tone => {
   const dns = props.dnsConfigs.find(d => d.id === s.dnsConfigId)
@@ -444,7 +533,7 @@ const servicePathTone = (s: ServicePath): Tone => {
   return worstTone([
     dns ? dnsTone(dns.status) : 'error',
     conn ? connTone(conn.status) : 'error',
-    targetTone(s.target.status),
+    targetToneOf(s.target.status),
   ])
 }
 
@@ -459,7 +548,7 @@ const traceHops = computed<TraceHop[]>(() => {
     { key: 'network', kicker: 'Network', title: props.network.name, sub: `${props.network.cloud.toUpperCase()} · ${props.network.regions[0].region}`, tone: props.network.status === 'ready' ? 'ready' : 'pending', status: netStatusLabel.value },
     { key: 'dns', kicker: 'Private DNS', title: s.upstream, sub: dns ? dnsTypeLabel(dns.type) : 'Not configured', tone: dns ? dnsTone(dns.status) : 'error', status: dns ? dnsStatusLabel(dns.status) : 'Missing' },
     { key: 'conn', kicker: 'Connectivity', title: conn ? conn.name : 'Not configured', sub: conn ? connectionTypeLabel(conn.type) : '—', tone: conn ? connTone(conn.status) : 'error', status: conn ? connStatusLabel(conn.status) : 'Missing' },
-    { key: 'target', kicker: 'Private target', title: s.target.name, sub: s.target.address, tone: targetTone(s.target.status), status: s.target.status === 'reachable' ? 'Reachable' : s.target.status === 'unreachable' ? 'Unreachable' : 'Pending' },
+    { key: 'target', kicker: 'Private target', title: s.target.name, sub: s.target.address, tone: targetToneOf(s.target.status), status: targetStatusLabel(s.target.status) },
   ]
 })
 const brokenHop = computed(() => traceHops.value.find(h => h.tone !== 'ready') || null)
@@ -497,234 +586,160 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   font-size: $kui-font-size-30;
   margin: $kui-space-0;
 
-  .ncm-caption-dim { color: $kui-color-text-neutral; }
+  .ncm-caption-dim { color: $kui-color-text-neutral; margin-left: $kui-space-30; }
 }
 
-.ncm-body {
-  display: grid;
-  gap: $kui-space-70;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+// ── Pannable topology canvas ────────────────────────────────────────────────
+.flowcanvas {
+  background-color: $kui-color-background-neutral-weakest;
+  background-image: radial-gradient($kui-color-border 1px, transparent 1px);
+  background-size: 22px 22px;
+  border: $kui-border-width-10 solid $kui-color-border;
+  border-radius: $kui-border-radius-40;
+  cursor: grab;
+  height: 560px;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  user-select: none;
 
-  @media (max-width: 1000px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  &--grabbing { cursor: grabbing; }
 }
 
-.ncm-scroll { overflow-x: auto; }
-
-// ── Dependency diagram ──────────────────────────────────────────────────────────
-.dgraph {
+.flow-controls {
   display: flex;
-  flex-direction: column;
+  gap: $kui-space-30;
+  left: $kui-space-50;
+  position: absolute;
+  top: $kui-space-50;
+  z-index: 2;
 }
 
-// Root node — the network. Prominent card the rest of the graph hangs from.
-.dnode {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
+.flow-stage {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform-origin: 0 0;
   width: 100%;
 }
 
-.dnode--root {
+.flow-edges {
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+}
+
+.flow-edge {
+  fill: none;
+  stroke: $kui-color-border-neutral;
+  stroke-width: 1.5;
+  transition: opacity 0.12s ease-in;
+
+  &--pending { stroke: $kui-color-text-warning; }
+  &--error { stroke: $kui-color-text-danger; }
+  &--ready { stroke: $kui-color-border-neutral; }
+  &--dim { opacity: 0.25; }
+}
+
+.edge-arrow {
+  &--pending { fill: $kui-color-text-warning; }
+  &--error { fill: $kui-color-text-danger; }
+  &--ready { fill: $kui-color-border-neutral; }
+}
+
+.fnode {
   align-items: center;
   background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
   border-radius: $kui-border-radius-40;
-  display: flex;
-  gap: $kui-space-50;
-  padding: $kui-space-50 $kui-space-60;
-  transition: border-color 0.12s ease-in, box-shadow 0.12s ease-in;
-
-  &:hover { border-color: $kui-color-border-primary-weak; }
-  &.dnode--selected {
-    border-color: $kui-color-border-primary;
-    box-shadow: 0 0 0 $kui-border-width-10 $kui-color-border-primary;
-  }
-}
-
-.dnode-icon--root {
-  align-items: center;
-  background-color: $kui-color-background-primary-weakest;
-  border-radius: $kui-border-radius-30;
-  color: $kui-color-text-primary;
-  display: flex;
-  flex: 0 0 auto;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}
-
-.dnode-body { display: flex; flex-direction: column; gap: $kui-space-20; margin-right: auto; min-width: 0; }
-.dnode-kicker {
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-10;
-  font-weight: $kui-font-weight-semibold;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.dnode-name { color: $kui-color-text; font-size: $kui-font-size-40; font-weight: $kui-font-weight-bold; }
-.dnode-meta { display: flex; flex-wrap: wrap; gap: $kui-space-30; margin-top: $kui-space-10; }
-.dmeta-chip {
-  background-color: $kui-color-background-neutral-weakest;
-  border-radius: $kui-border-radius-20;
-  color: $kui-color-text-neutral;
-  font-size: $kui-font-size-20;
-  padding: $kui-space-10 $kui-space-30;
-}
-
-// Tree of branches hanging off the root. Connectors are a continuous vertical
-// guide (container-level) plus a horizontal tick anchored to each row's OWN
-// centre (top: 50% on the row element). Because the tick lives on the row, it
-// stays centred no matter how tall the row gets or whether text wraps.
-.dtree {
-  display: flex;
-  flex-direction: column;
-  margin-left: calc(#{$kui-space-60} + 18px);
-  padding-left: $kui-space-80;
-  position: relative;
-
-  // Level-1 guide: the network's spine.
-  &::before {
-    border-left: $kui-border-width-10 solid $kui-color-border;
-    bottom: $kui-space-70;
-    content: '';
-    left: $kui-space-20;
-    position: absolute;
-    top: 0;
-  }
-}
-
-.dtree-branch { position: relative; }
-
-.dgroup {
-  align-items: center;
-  background: none;
-  border: none;
-  border-radius: $kui-border-radius-30;
+  box-shadow: $kui-shadow;
   cursor: pointer;
   display: flex;
-  font-family: inherit;
-  gap: $kui-space-30;
-  padding: $kui-space-40 $kui-space-30;
-  position: relative;
+  gap: $kui-space-40;
+  padding: $kui-space-0 $kui-space-50;
+  position: absolute;
   text-align: left;
-  width: 100%;
-
-  &:hover { background-color: $kui-color-background-neutral-weakest; }
-
-  // Tick from the level-1 guide into this group's centre.
-  &::before {
-    border-top: $kui-border-width-10 solid $kui-color-border;
-    content: '';
-    left: calc(-1 * (#{$kui-space-80} - #{$kui-space-20}));
-    position: absolute;
-    top: 50%;
-    width: calc(#{$kui-space-80} - #{$kui-space-20} - #{$kui-space-30});
-  }
-}
-
-.dgroup-caret { color: $kui-color-text-neutral; flex: 0 0 auto; }
-.dgroup-icon { align-items: center; color: $kui-color-text-neutral; display: flex; flex: 0 0 auto; }
-.dgroup-label { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; }
-.dgroup-count {
-  align-items: center;
-  background-color: $kui-color-background-neutral-weak;
-  border-radius: $kui-border-radius-round;
-  color: $kui-color-text-neutral;
-  display: inline-flex;
-  font-size: $kui-font-size-10;
-  font-weight: $kui-font-weight-semibold;
-  height: 18px;
-  justify-content: center;
-  min-width: 18px;
-  padding: 0 $kui-space-20;
-}
-.dgroup-att {
-  align-items: center;
-  color: $kui-color-text-warning;
-  display: inline-flex;
-  font-size: $kui-font-size-20;
-  font-weight: $kui-font-weight-semibold;
-  gap: $kui-space-20;
-  margin-left: $kui-space-30;
-}
-
-// Leaf nodes within a branch. Same continuous-guide + per-row-tick model.
-.dtree-children {
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-40;
-  padding: $kui-space-40 $kui-space-0 $kui-space-50 $kui-space-80;
-  position: relative;
-
-  // Level-2 guide, indented under the group's tick.
-  &::before {
-    border-left: $kui-border-width-10 solid $kui-color-border;
-    bottom: $kui-space-60;
-    content: '';
-    left: $kui-space-50;
-    position: absolute;
-    top: calc(-1 * #{$kui-space-40});
-  }
-}
-
-.dtree-node { position: relative; }
-
-.dnode--leaf {
-  align-items: center;
-  background-color: $kui-color-background;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-30;
-  display: flex;
-  gap: $kui-space-40;
-  padding: $kui-space-40 $kui-space-50;
-  position: relative;
-  transition: border-color 0.12s ease-in, box-shadow 0.12s ease-in;
-
-  // Tick from the level-2 guide into this leaf's centre.
-  &::before {
-    border-top: $kui-border-width-10 solid $kui-color-border;
-    content: '';
-    left: calc(-1 * (#{$kui-space-80} - #{$kui-space-50}));
-    position: absolute;
-    top: 50%;
-    width: calc(#{$kui-space-80} - #{$kui-space-50});
-  }
+  transition: border-color 0.12s ease-in, box-shadow 0.12s ease-in, opacity 0.12s ease-in;
 
   &:hover { border-color: $kui-color-border-primary-weak; }
-  &.dnode--selected {
+  &--selected {
     border-color: $kui-color-border-primary;
-    box-shadow: 0 0 0 $kui-border-width-10 $kui-color-border-primary;
+    box-shadow: 0 0 0 $kui-border-width-10 $kui-color-border-primary, $kui-shadow;
   }
+  &--network {
+    background-color: $kui-color-background-primary-weakest;
+    border-color: $kui-color-border-primary-weak;
+  }
+  &--dim { opacity: 0.4; }
 }
 
-.dnode-dot {
-  border-radius: $kui-border-radius-circle;
+.fnode-ic {
+  align-items: center;
+  border-radius: $kui-border-radius-30;
+  color: $kui-color-text-neutral;
+  display: flex;
   flex: 0 0 auto;
-  height: 8px;
-  width: 8px;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+
+  &--gateway { background-color: $kui-color-background-decorative-purple-weakest; color: $kui-color-text-decorative-purple; }
+  &--network { background-color: $kui-color-background-primary-weak; color: $kui-color-text-primary; }
+  &--connectivity { background-color: $kui-color-background-decorative-aqua-weakest; color: $kui-color-text-decorative-aqua; }
+  &--dns { background-color: $kui-color-background-neutral-weakest; color: $kui-color-text-decorative-pink; }
+  &--target { background-color: $kui-color-background-neutral-weak; color: $kui-color-text-neutral-strong; }
+}
+
+.fnode-text { display: flex; flex-direction: column; gap: 1px; margin-right: auto; min-width: 0; overflow: hidden; }
+.fnode-kicker {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-10;
+  font-weight: $kui-font-weight-semibold;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.fnode-dir { color: $kui-color-text-decorative-aqua; text-transform: none; letter-spacing: normal; }
+.fnode-name {
+  color: $kui-color-text;
+  font-size: $kui-font-size-30;
+  font-weight: $kui-font-weight-semibold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fnode-sub {
+  color: $kui-color-text-neutral;
+  font-size: $kui-font-size-20;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fnode-status { flex: 0 0 auto; }
+.fnode-dot {
+  border-radius: $kui-border-radius-circle;
+  display: block;
+  height: 10px;
+  width: 10px;
 
   &--ready { background-color: $kui-color-text-success; }
   &--pending { background-color: $kui-color-text-warning; }
   &--error { background-color: $kui-color-text-danger; }
 }
-.dnode-leaf-name { color: $kui-color-text; font-size: $kui-font-size-30; margin-right: auto; overflow-wrap: anywhere; }
 
-.dnode-dep {
+// ── Legend ────────────────────────────────────────────────────────────────────
+.ncm-legendbar {
   align-items: center;
   color: $kui-color-text-neutral;
   display: flex;
+  flex-wrap: wrap;
   font-size: $kui-font-size-20;
-  gap: $kui-space-20;
-  padding: $kui-space-20 $kui-space-0 $kui-space-0 $kui-space-60;
-
-  &--pending { color: $kui-color-text-warning; }
-  &--error { color: $kui-color-text-danger; }
+  gap: $kui-space-60;
 }
-.dnode-dep-arrow { flex: 0 0 auto; }
+.ncm-legend-item { align-items: center; display: flex; gap: $kui-space-30; }
+.ncm-legend-flow { color: $kui-color-text-neutral; margin-left: auto; }
 
 .ncm-dot {
   border-radius: $kui-border-radius-circle;
@@ -737,20 +752,9 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   &--error { background-color: $kui-color-text-danger; }
 }
 
-// ── Detail panel ──────────────────────────────────────────────────────────────
-.ncm-detail {
-  align-self: start;
-  background-color: $kui-color-background;
-  border: $kui-border-width-10 solid $kui-color-border;
-  border-radius: $kui-border-radius-40;
-  display: flex;
-  flex-direction: column;
-  gap: $kui-space-60;
-  padding: $kui-space-70;
-}
-
-.ncm-detail-head { display: flex; flex-direction: column; gap: $kui-space-20; }
-
+// ── Detail slideout ───────────────────────────────────────────────────────────
+.ncm-detail { display: flex; flex-direction: column; gap: $kui-space-60; }
+.ncm-detail-head { align-items: center; display: flex; gap: $kui-space-40; justify-content: space-between; }
 .ncm-detail-kicker {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-10;
@@ -758,25 +762,15 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-
-.ncm-detail-title {
-  color: $kui-color-text;
-  font-size: $kui-font-size-50;
-  font-weight: $kui-font-weight-bold;
-  margin: $kui-space-0;
-  overflow-wrap: anywhere;
-}
-
 .ncm-detail-facts {
   display: grid;
-  gap: $kui-space-30 $kui-space-50;
+  gap: $kui-space-40 $kui-space-50;
   grid-template-columns: auto 1fr;
   margin: $kui-space-0;
 
   dt { color: $kui-color-text-neutral; font-size: $kui-font-size-30; }
   dd { color: $kui-color-text; font-size: $kui-font-size-30; margin: $kui-space-0; overflow-wrap: anywhere; text-align: right; }
 }
-
 .ncm-detail-action {
   border-radius: $kui-border-radius-30;
   display: flex;
@@ -794,7 +788,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
-
   .ncm-detail-action-text {
     color: $kui-color-text;
     font-size: $kui-font-size-30;
@@ -803,18 +796,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   }
 }
 
-// ── Legend ────────────────────────────────────────────────────────────────────
-.ncm-legendbar {
-  align-items: center;
-  color: $kui-color-text-neutral;
-  display: flex;
-  flex-wrap: wrap;
-  font-size: $kui-font-size-20;
-  gap: $kui-space-60;
-}
-
-.ncm-legend-item { align-items: center; display: flex; gap: $kui-space-30; }
-
 // ── Trace mode ──────────────────────────────────────────────────────────────
 .ncm-trace-picker {
   align-items: center;
@@ -822,15 +803,12 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   flex-wrap: wrap;
   gap: $kui-space-40 $kui-space-50;
 }
-
 .ncm-trace-label {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-30;
   font-weight: $kui-font-weight-semibold;
 }
-
 .ncm-trace-chips { display: flex; flex-wrap: wrap; gap: $kui-space-40; }
-
 .ncm-trace-chip {
   align-items: center;
   background-color: $kui-color-background;
@@ -854,7 +832,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
 }
 
 .ncm-trace { display: flex; flex-direction: column; gap: $kui-space-60; }
-
 .ncm-trace-chain {
   align-items: stretch;
   display: flex;
@@ -862,7 +839,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   overflow-x: auto;
   padding-bottom: $kui-space-40;
 }
-
 .ncm-hop {
   background-color: $kui-color-background;
   border: $kui-border-width-10 solid $kui-color-border;
@@ -877,7 +853,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   &--error { border-left: $kui-border-width-30 solid $kui-color-background-danger; }
   &--broken { box-shadow: $kui-shadow-focus; }
 }
-
 .ncm-node-kicker {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-10;
@@ -885,10 +860,8 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-
 .ncm-hop-title { color: $kui-color-text; font-size: $kui-font-size-30; font-weight: $kui-font-weight-semibold; overflow-wrap: anywhere; }
 .ncm-node-sub { color: $kui-color-text-neutral; font-size: $kui-font-size-20; }
-
 .ncm-node-status {
   font-size: $kui-font-size-20;
   font-weight: $kui-font-weight-semibold;
@@ -897,7 +870,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   &--error { color: $kui-color-text-danger; }
   &--ready { color: $kui-color-text-success; }
 }
-
 .ncm-hop-arrow {
   align-self: center;
   color: $kui-color-text-neutral;
@@ -908,7 +880,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   &--error { color: $kui-color-text-danger; }
   &--ready { color: $kui-color-text-success; }
 }
-
 .ncm-trace-summary {
   border-radius: $kui-border-radius-30;
   color: $kui-color-text;
@@ -919,7 +890,6 @@ const traceSummaryTone = computed(() => brokenHop.value?.tone ?? 'ready')
   &--pending { background-color: $kui-color-background-warning-weakest; }
   &--error { background-color: $kui-color-background-danger-weakest; }
 }
-
 .ncm-trace-empty {
   color: $kui-color-text-neutral;
   font-size: $kui-font-size-30;
