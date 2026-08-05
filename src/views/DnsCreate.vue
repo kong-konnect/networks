@@ -7,11 +7,10 @@
   >
     <template #actions>
       <KButton
-        v-if="!kaiCfg.shown.value"
         appearance="tertiary"
         class="kai-header-action"
         data-testid="dns-kai-configure"
-        @click="kaiCfg.run()"
+        @click="openKaiChat({ mode: 'add-connectivity', networkId })"
       >
         <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
         Configure with KAi
@@ -29,17 +28,6 @@
               <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
             </div>
           </KCard>
-
-          <KaiSummaryCard
-            v-if="kaiCfg.shown.value"
-            :loading="kaiCfg.loading.value"
-            title="KAi setup suggestion"
-            :insights="kaiCfgInsights"
-            :actions="kaiCfgActions"
-            data-testid="dns-kai-suggestion"
-            @action="onKaiCfgAction"
-            @close="kaiCfg.close()"
-          />
 
           <EntityFormBlock
             :step="1"
@@ -132,15 +120,14 @@ import {
 import PageLayout from '@/components/PageLayout.vue'
 import EntityFormBlock from '@/components/EntityFormBlock.vue'
 import WizardFooter from '@/components/WizardFooter.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import { useKaiPanel } from '@/composables/useKaiPanel'
+import { useKaiChat } from '@/composables/useKaiChat'
 import type { DnsType } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const networkId = computed(() => route.params.id as string)
 const network = computed(() => store.getNetworkById(networkId.value))
@@ -166,22 +153,6 @@ const typeHelp = computed(() =>
     ? 'Kong forwards matching queries to a resolver endpoint you run in your cloud.'
     : 'Kong hosts the zone and answers queries for this domain from the network.',
 )
-
-// ── KAi setup suggestion ──────────────────────────────────────────────────────
-const kaiCfg = useKaiPanel(900)
-const kaiCfgInsights = computed<KaiInsight[]>(() => [
-  { lead: 'Recommended:', text: 'to resolve your internal service names (like payments.internal.company.com) to addresses on this network, use a private hosted zone — Kong hosts the zone and answers the queries.' },
-  { text: 'If you instead need to forward lookups to a resolver you already run in your cloud, choose an outbound resolver.' },
-])
-const kaiCfgActions: KaiAction[] = [
-  { key: 'apply', label: 'Use a private hosted zone' },
-]
-const onKaiCfgAction = (key: string) => {
-  if (key === 'apply') {
-    form.type = 'private-hosted-zone'
-    if (!form.usedFor.trim()) form.usedFor = 'Upstream services'
-  }
-}
 
 const canCreate = computed(() => form.name.trim() !== '' && form.usedFor.trim() !== '')
 

@@ -6,11 +6,10 @@
   >
     <template #actions>
       <KButton
-        v-if="!kaiCfg.shown.value"
         appearance="tertiary"
         class="kai-header-action"
         data-testid="create-kai-configure"
-        @click="kaiCfg.run()"
+        @click="openKaiChat({ mode: 'network-setup' })"
       >
         <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
         Configure with KAi
@@ -18,17 +17,6 @@
     </template>
 
     <div class="network-create">
-      <KaiSummaryCard
-        v-if="kaiCfg.shown.value"
-        :loading="kaiCfg.loading.value"
-        title="KAi setup suggestion"
-        :insights="kaiCfgInsights"
-        :actions="kaiCfgActions"
-        data-testid="create-kai-suggestion"
-        @action="onKaiCfgAction"
-        @close="kaiCfg.close()"
-      />
-
       <EntityFormBlock
         :step="1"
         title="Network details"
@@ -271,15 +259,14 @@ import PageLayout from '@/components/PageLayout.vue'
 import ConfigSlideout from '@/components/ConfigSlideout.vue'
 import EntityFormBlock from '@/components/EntityFormBlock.vue'
 import WizardFooter from '@/components/WizardFooter.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
-import { useKaiPanel } from '@/composables/useKaiPanel'
+import { useKaiChat } from '@/composables/useKaiChat'
 import { providerIcon, regionFlag, regionLabel } from '@/utils/regionDisplay'
 import type { CloudProvider } from '@/types'
 
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const toaster = new ToastManager()
 onBeforeUnmount(() => toaster.destroy())
@@ -391,26 +378,6 @@ const cidrWarning = computed(() => {
   }
   return ''
 })
-
-// ── KAi setup suggestion ──────────────────────────────────────────────────────
-// Recommends a right-sized, immutable-safe CIDR (and zones) and can apply it — heading
-// off the "too small, can't resize" trap.
-const kaiCfg = useKaiPanel(900)
-const kaiCfgInsights = computed<KaiInsight[]>(() => [
-  { lead: 'Recommended range:', text: 'use 10.0.0.0/16 — about 65,000 addresses. Since the CIDR is permanent, this leaves plenty of room to scale without ever recreating the network.' },
-  { text: `Deploy across all availability zones in ${form.region || 'the region'} for resilience, and keep the range clear of any CIDRs already used in your own cloud.` },
-])
-const kaiCfgActions: KaiAction[] = [
-  { key: 'apply', label: 'Apply recommended settings' },
-]
-const onKaiCfgAction = (key: string) => {
-  if (key === 'apply') {
-    form.cidr = '10.0.0.0/16'
-    if (!form.name.trim()) form.name = `${form.cloud}-${form.region}`
-    if (form.region) form.zones = regionZones(form.region)
-    validateCidr()
-  }
-}
 
 const canCreate = computed(() =>
   form.name.trim() !== '' && !nameError.value &&

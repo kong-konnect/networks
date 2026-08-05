@@ -6,11 +6,10 @@
   >
     <template #actions>
       <KButton
-        v-if="!kaiShown"
         appearance="tertiary"
         class="kai-header-action"
         data-testid="kai-configure"
-        @click="runKaiConfigure"
+        @click="openKaiChat({ mode: 'add-connectivity', networkId })"
       >
         <SparklesIcon :size="KUI_ICON_SIZE_20" decorative />
         Configure with KAi
@@ -27,18 +26,6 @@
         <span class="context-value">{{ network.cloud.toUpperCase() }} · {{ network.regions[0].region }}</span>
       </div>
     </KCard>
-
-    <KaiSummaryCard
-      v-if="kaiShown"
-      :loading="kaiLoading"
-      title="KAi setup suggestion"
-      :insights="kaiInsights"
-      :one-liner="kaiOneLiner"
-      :actions="kaiActions"
-      data-testid="kai-setup-suggestion"
-      @action="onKaiAction"
-      @close="kaiShown = false"
-    />
 
     <!-- Choose method -->
     <EntityFormBlock
@@ -223,15 +210,15 @@ import { KUI_ICON_SIZE_20 } from '@kong/design-tokens'
 import PageLayout from '@/components/PageLayout.vue'
 import EntityFormBlock from '@/components/EntityFormBlock.vue'
 import WizardFooter from '@/components/WizardFooter.vue'
-import KaiSummaryCard from '@/components/KaiSummaryCard.vue'
-import type { KaiInsight, KaiAction } from '@/components/KaiSummaryCard.vue'
 import { useNetworksStore } from '@/composables/useNetworksStore'
+import { useKaiChat } from '@/composables/useKaiChat'
 import { directionCategory, directionCategoryLabel, directionCategoryHelp } from '@/utils/connectionDisplay'
 import type { CloudProvider, ConnectionType, ConnectionFamily, ConnectionDirection } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const store = useNetworksStore()
+const { openKaiChat } = useKaiChat()
 
 const networkId = computed(() => route.params.id as string)
 const network = computed(() => store.getNetworkById(networkId.value))
@@ -386,47 +373,6 @@ const methods = computed<Method[]>(() =>
 const selectedMethod = computed<Method | undefined>(() =>
   methods.value.find(m => m.type === selectedType.value),
 )
-
-// ── KAi setup assist (prototype) ─────────────────────────────────────────────
-// "Configure with KAi" recommends a connection method for this cloud and can pre-fill
-// the form. Mirrors the product's "Configure with KAi" entry on setup screens.
-const kaiShown = ref(false)
-const kaiLoading = ref(false)
-
-const recommendedType = computed<ConnectionType>(() => {
-  const c = network.value?.cloud
-  if (c === 'gcp') return 'gcp-psc-egress'
-  if (c === 'azure') return 'azure-private-endpoint-egress'
-  return 'aws-rep-egress'
-})
-const recommendedMethod = computed(() => methods.value.find(m => m.type === recommendedType.value) || methods.value[0])
-
-const kaiInsights = computed<KaiInsight[]>(() => {
-  const m = recommendedMethod.value
-  if (!m) return []
-  return [
-    { lead: 'Recommended:', text: `to let the gateway reach your upstream services privately on ${network.value?.cloud.toUpperCase()}, use ${m.label}. It's service-scoped and one-way (Kong → upstream), so it exposes only what you share.` },
-    { text: 'If you need full bidirectional routing between whole networks instead, peer the networks — but that grants broader access.' },
-  ]
-})
-const kaiOneLiner = computed(() => `Recommended: ${recommendedMethod.value?.label} for private upstream access.`)
-const kaiActions = computed<KaiAction[]>(() => [
-  { key: 'apply', label: `Use ${recommendedMethod.value?.label}` },
-  { key: 'ask', label: 'Ask KAi' },
-])
-
-const runKaiConfigure = () => {
-  kaiShown.value = true
-  kaiLoading.value = true
-  window.setTimeout(() => { kaiLoading.value = false }, 1000)
-}
-const onKaiAction = (key: string) => {
-  if (key === 'apply' && recommendedMethod.value) {
-    selectedType.value = recommendedMethod.value.type
-    if (!form.name.trim()) form.name = `${network.value?.cloud}-upstream-access`
-  }
-  // 'ask' is a no-op stub (would open the global Ask KAi assistant).
-}
 
 // Directional variant (prototype compare): group the methods by traffic direction so the
 // one-way nature of resource endpoints (Kong → upstream only) is explicit.

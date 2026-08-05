@@ -34,8 +34,9 @@
        panel, bottom-left. Not a product control. -->
   <PrototypeControls />
 
-  <!-- Shared KAi conversational setup surface (opened from the empty state or a network) -->
-  <KaiChat />
+  <!-- Shared KAi conversational setup surface — fills the content area, keeping the
+       top nav + sidebar visible (matches the Figma). -->
+  <KaiChat :left-offset="isNewNav ? 192 : 240" />
 </template>
 
 <script setup lang="ts">

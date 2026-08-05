@@ -1,5 +1,12 @@
 <template>
-  <div v-if="isOpen" class="kaichat" role="dialog" aria-label="Set up with KAi" data-testid="kai-chat">
+  <div
+    v-if="isOpen"
+    class="kaichat"
+    :style="{ left: `${leftOffset}px` }"
+    role="dialog"
+    aria-label="Set up with KAi"
+    data-testid="kai-chat"
+  >
     <!-- Header -->
     <div class="kaichat-header">
       <span class="kaichat-title">
@@ -211,6 +218,8 @@ import { KUI_ICON_SIZE_20, KUI_ICON_SIZE_30 } from '@kong/design-tokens'
 import { useKaiChat } from '@/composables/useKaiChat'
 import { useNetworksStore } from '@/composables/useNetworksStore'
 import type { ConnectionType, ConnectionFamily, ConnectionDirection, CloudProvider } from '@/types'
+
+withDefaults(defineProps<{ leftOffset?: number }>(), { leftOffset: 192 })
 
 const { isOpen, launch, closeKaiChat } = useKaiChat()
 const router = useRouter()
@@ -474,16 +483,17 @@ watch(isOpen, (open) => { if (open) start() })
 </script>
 
 <style scoped lang="scss">
+// Fills the content area only — top nav (60px) and sidebar (left offset via prop)
+// stay visible, matching the Figma.
 .kaichat {
   background-color: $kui-color-background;
   bottom: 0;
   display: flex;
   flex-direction: column;
-  left: 0;
   position: fixed;
   right: 0;
-  top: 0;
-  z-index: 1000;
+  top: 60px;
+  z-index: 40;
 }
 
 // Header
